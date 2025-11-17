@@ -2,9 +2,11 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { User, Rocket, BookOpen, Trophy, LogOut, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { gameState, User as UserType } from '@/lib/gameState';
+import { useAuth } from '@/hooks/useAuth';
 
 const GameLayout = () => {
   const navigate = useNavigate();
+  const { user: authUser, loading, signOut } = useAuth();
   const [user, setUser] = useState<UserType>(gameState.getUser());
 
   useEffect(() => {
@@ -12,9 +14,30 @@ const GameLayout = () => {
     return unsubscribe;
   }, []);
 
-  const handleLogout = () => {
-    navigate('/login');
+  useEffect(() => {
+    if (!loading && !authUser) {
+      navigate('/login');
+    }
+  }, [authUser, loading, navigate]);
+
+  const handleLogout = async () => {
+    await signOut();
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+        <div className="starfield"></div>
+        <p className="relative z-10 text-lg text-muted-foreground">
+          Preparing your adventure...
+        </p>
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return null;
+  }
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: Rocket },
@@ -74,13 +97,18 @@ const GameLayout = () => {
               </div>
 
               {/* User Avatar & Level */}
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-lg">
                   {user.avatar}
                 </div>
-                <span className="hidden sm:block text-sm font-medium">
-                  Level {user.level}
-                </span>
+                <div className="hidden sm:flex flex-col leading-tight">
+                  <span className="text-sm font-semibold text-foreground">
+                    {user.name}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Level {user.level}
+                  </span>
+                </div>
               </div>
 
               {/* Logout Button */}

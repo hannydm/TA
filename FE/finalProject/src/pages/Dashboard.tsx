@@ -202,55 +202,72 @@ const Dashboard = () => {
                 <Trophy className="w-5 h-5 text-neon-magenta mr-2" />
                 Explorer Ranking
               </h3>
+              <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                Coming Soon
+              </span>
             </div>
 
-            {/* Filter Buttons */}
-            <div className="flex space-x-1 mb-4">
-              <button className="px-3 py-1 rounded-lg bg-neon-cyan/20 text-neon-cyan text-sm font-medium">
-                Weekly
-              </button>
-              <button className="px-3 py-1 rounded-lg text-muted-foreground hover:text-neon-cyan text-sm">
-                Overall
-              </button>
-            </div>
-
-            {/* Leaderboard List */}
-            <div className="space-y-2">
-              {leaderboard.slice(0, 6).map((player) => (
-                <div
-                  key={player.rank}
-                  className={`flex items-center space-x-3 p-2 rounded-lg transition-colors ${
-                    player.isCurrentUser 
-                      ? 'bg-neon-cyan/20 border border-neon-cyan/50 glow-cyan' 
-                      : 'hover:bg-surface/50'
-                  }`}
-                >
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                    player.rank <= 3 ? 'bg-gradient-to-br from-neon-cyan to-neon-magenta text-background' : 'bg-surface text-muted-foreground'
-                  }`}>
-                    {player.rank}
-                  </div>
-                  
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-lg bg-surface">
-                    {player.avatar}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium truncate ${
-                      player.isCurrentUser ? 'text-neon-cyan' : 'text-foreground'
-                    }`}>
-                      {player.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{player.xp} XP</p>
-                  </div>
+            {leaderboard.length === 0 ? (
+              <div className="p-4 rounded-xl border border-dashed border-border text-center text-muted-foreground text-sm">
+                Leaderboard data will appear once explorers start earning XP.
+              </div>
+            ) : (
+              <>
+                {/* Filter Buttons */}
+                <div className="flex space-x-1 mb-4">
+                  <button className="px-3 py-1 rounded-lg bg-neon-cyan/20 text-neon-cyan text-sm font-medium">
+                    Weekly
+                  </button>
+                  <button className="px-3 py-1 rounded-lg text-muted-foreground hover:text-neon-cyan text-sm">
+                    Overall
+                  </button>
                 </div>
-              ))}
-            </div>
 
-            {/* View Full Leaderboard */}
-            <button className="w-full mt-4 px-4 py-2 rounded-lg border border-border text-muted-foreground hover:text-neon-magenta hover:border-neon-magenta transition-colors text-sm">
-              View Full Ranking
-            </button>
+                {/* Leaderboard List */}
+                <div className="space-y-2">
+                  {leaderboard.slice(0, 6).map((player) => (
+                    <div
+                      key={player.rank}
+                      className={`flex items-center space-x-3 p-2 rounded-lg transition-colors ${
+                        player.isCurrentUser
+                          ? 'bg-neon-cyan/20 border border-neon-cyan/50 glow-cyan'
+                          : 'hover:bg-surface/50'
+                      }`}
+                    >
+                      <div
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          player.rank <= 3
+                            ? 'bg-gradient-to-br from-neon-cyan to-neon-magenta text-background'
+                            : 'bg-surface text-muted-foreground'
+                        }`}
+                      >
+                        {player.rank}
+                      </div>
+
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-lg bg-surface">
+                        {player.avatar}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className={`text-sm font-medium truncate ${
+                            player.isCurrentUser ? 'text-neon-cyan' : 'text-foreground'
+                          }`}
+                        >
+                          {player.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{player.xp} XP</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* View Full Leaderboard */}
+                <button className="w-full mt-4 px-4 py-2 rounded-lg border border-border text-muted-foreground hover:text-neon-magenta hover:border-neon-magenta transition-colors text-sm">
+                  View Full Ranking
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

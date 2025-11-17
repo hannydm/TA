@@ -27,45 +27,47 @@ export interface QuizResult {
   completed: boolean;
 }
 
-// Default game data
-export const defaultUser: User = {
-  id: '1',
-  username: 'explorer_andi',
-  name: 'Andi Pratama',
-  level: 3,
-  xp: 150,
-  maxXp: 200,
-  badges: ['first_mission', 'quiz_master'],
-  avatar: '👨‍🚀'
+const baseUserState: User = {
+  id: '',
+  username: '',
+  name: '',
+  level: 1,
+  xp: 0,
+  maxXp: 100,
+  badges: [],
+  avatar: '👤',
 };
+
+// Default game data
+export const defaultUser: User = { ...baseUserState };
 
 export const missions: Mission[] = [
   {
     id: '1',
     title: 'Introduction to Programming',
     description: 'Learn the basics of programming and algorithms',
-    status: 'completed',
+    status: 'active',
     xpReward: 50,
-    progress: 100,
-    chapter: 1
+    progress: 0,
+    chapter: 1,
   },
   {
     id: '2',
     title: 'Data Structures',
     description: 'Explore arrays, lists, and basic data structures',
-    status: 'completed',
+    status: 'locked',
     xpReward: 75,
-    progress: 100,
-    chapter: 2
+    progress: 0,
+    chapter: 2,
   },
   {
     id: '3',
     title: 'Object-Oriented Programming',
     description: 'Master classes, objects, and OOP principles',
-    status: 'active',
+    status: 'locked',
     xpReward: 100,
-    progress: 60,
-    chapter: 3
+    progress: 0,
+    chapter: 3,
   },
   {
     id: '4',
@@ -74,7 +76,7 @@ export const missions: Mission[] = [
     status: 'locked',
     xpReward: 125,
     progress: 0,
-    chapter: 4
+    chapter: 4,
   },
   {
     id: '5',
@@ -83,7 +85,7 @@ export const missions: Mission[] = [
     status: 'locked',
     xpReward: 150,
     progress: 0,
-    chapter: 5
+    chapter: 5,
   },
   {
     id: '6',
@@ -92,20 +94,17 @@ export const missions: Mission[] = [
     status: 'locked',
     xpReward: 200,
     progress: 0,
-    chapter: 6
-  }
+    chapter: 6,
+  },
 ];
 
-export const leaderboard = [
-  { rank: 1, name: 'Sarah Cosmic', xp: 2450, avatar: '👩‍🚀', isCurrentUser: false },
-  { rank: 2, name: 'David Stellar', xp: 2380, avatar: '👨‍💻', isCurrentUser: false },
-  { rank: 3, name: 'Andi Pratama', xp: 2150, avatar: '👨‍🚀', isCurrentUser: true },
-  { rank: 4, name: 'Maya Galaxy', xp: 2050, avatar: '👩‍💻', isCurrentUser: false },
-  { rank: 5, name: 'Rio Nebula', xp: 1980, avatar: '👨‍🎓', isCurrentUser: false },
-  { rank: 6, name: 'Siti Nova', xp: 1920, avatar: '👩‍🎓', isCurrentUser: false },
-  { rank: 7, name: 'Budi Comet', xp: 1850, avatar: '👨‍🚀', isCurrentUser: false },
-  { rank: 8, name: 'Rina Pulsar', xp: 1780, avatar: '👩‍💻', isCurrentUser: false }
-];
+export const leaderboard: Array<{
+  rank: number;
+  name: string;
+  xp: number;
+  avatar: string;
+  isCurrentUser: boolean;
+}> = [];
 
 // Game state management
 class GameStateManager {
@@ -114,6 +113,16 @@ class GameStateManager {
 
   getUser(): User {
     return { ...this.user };
+  }
+
+  setUserProfile(overrides: Partial<User>): void {
+    this.user = { ...this.user, ...baseUserState, ...overrides };
+    this.notifyListeners();
+  }
+
+  resetUserProfile(): void {
+    this.user = { ...baseUserState };
+    this.notifyListeners();
   }
 
   addXP(amount: number): boolean {
