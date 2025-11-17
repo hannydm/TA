@@ -1,0 +1,318 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Cosmic Adventure Design System - Petualangan Informatika */
+/* All colors MUST be HSL */
+
+@layer base {
+  :root {
+    /* Cosmic Background Palette */
+    --background: 225 84% 10%;              /* Deep space dark blue */
+    --foreground: 210 40% 98%;              /* Bright cosmic white */
+    --surface: 232 84% 14%;                 /* Slightly lighter cosmic surface */
+    
+    /* Card & Surfaces */
+    --card: 232 60% 12%;                    /* Dark cosmic cards */
+    --card-foreground: 210 40% 98%;         /* Bright text on cards */
+    --card-glow: 232 80% 16%;               /* Subtle glow effect */
+    
+    /* Primary Cosmic Theme */
+    --primary: 251 91% 60%;                 /* Vibrant cosmic purple */
+    --primary-glow: 251 91% 70%;            /* Lighter primary glow */
+    --primary-foreground: 210 40% 98%;      /* White text on primary */
+    
+    /* Neon Accents */
+    --neon-cyan: 188 94% 58%;               /* Electric cyan #22d3ee */
+    --neon-magenta: 292 84% 61%;            /* Electric magenta #d946ef */
+    --neon-cyan-glow: 188 94% 68%;          /* Brighter cyan glow */
+    --neon-magenta-glow: 292 84% 71%;       /* Brighter magenta glow */
+    
+    /* Secondary */
+    --secondary: 232 60% 18%;               /* Darker cosmic secondary */
+    --secondary-foreground: 210 40% 98%;    /* White text */
+    
+    /* Muted */
+    --muted: 225 60% 20%;                   /* Subtle cosmic muted */
+    --muted-foreground: 215 20% 70%;        /* Muted text */
+    
+    /* Accent */
+    --accent: 188 94% 58%;                  /* Cyan accent */
+    --accent-foreground: 225 84% 10%;       /* Dark text on accent */
+    
+    /* Status Colors */
+    --success: 142 71% 45%;                 /* Space green */
+    --warning: 48 96% 53%;                  /* Cosmic yellow */
+    --destructive: 0 84% 60%;               /* Alert red */
+    --destructive-foreground: 210 40% 98%;  /* White on red */
+    
+    /* Borders & Inputs */
+    --border: 232 60% 20%;                  /* Subtle cosmic borders */
+    --input: 232 60% 16%;                   /* Input backgrounds */
+    --ring: 188 94% 58%;                    /* Focus ring cyan */
+    
+    /* XP & Progress */
+    --xp-bg: 232 60% 16%;                   /* XP bar background */
+    --xp-fill: 188 94% 58%;                 /* XP bar fill */
+    --xp-glow: 188 94% 68%;                 /* XP bar glow */
+    
+    /* Mission States */
+    --mission-active: 188 94% 58%;          /* Active missions */
+    --mission-completed: 142 71% 45%;       /* Completed missions */
+    --mission-locked: 215 20% 30%;          /* Locked missions */
+    
+    /* Gradients */
+    --gradient-cosmic: linear-gradient(135deg, hsl(225, 84%, 10%) 0%, hsl(251, 91%, 25%) 50%, hsl(292, 84%, 35%) 100%);
+    --gradient-neon: linear-gradient(90deg, hsl(188, 94%, 58%) 0%, hsl(292, 84%, 61%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(251, 91%, 60%) 0%, hsl(251, 91%, 70%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(232, 60%, 12%) 0%, hsl(232, 80%, 16%) 100%);
+    
+    /* Shadows & Glows */
+    --shadow-cosmic: 0 10px 30px -10px hsla(251, 91%, 60%, 0.3);
+    --shadow-neon: 0 0 20px hsla(188, 94%, 58%, 0.4);
+    --shadow-card: 0 8px 32px hsla(225, 84%, 5%, 0.5);
+    
+    /* Animations */
+    --transition-cosmic: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --glow-pulse: 0 0 20px hsla(188, 94%, 58%, 0.6);
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background: var(--gradient-cosmic);
+    min-height: 100vh;
+    background-attachment: fixed;
+  }
+  
+  /* Starfield Background Animation */
+  .starfield {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    opacity: 0.6;
+  }
+  
+  .starfield::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+      radial-gradient(2px 2px at 20px 30px, hsl(188, 94%, 80%), transparent),
+      radial-gradient(2px 2px at 40px 70px, hsl(292, 84%, 80%), transparent),
+      radial-gradient(1px 1px at 90px 40px, hsl(188, 94%, 90%), transparent),
+      radial-gradient(1px 1px at 130px 80px, hsl(251, 91%, 80%), transparent),
+      radial-gradient(2px 2px at 160px 30px, hsl(292, 84%, 70%), transparent);
+    background-repeat: repeat;
+    background-size: 200px 100px;
+    animation: sparkle 4s linear infinite;
+  }
+  
+  @keyframes sparkle {
+    from { transform: translateY(0px); }
+    to { transform: translateY(-100px); }
+  }
+}
+
+@layer components {
+  /* Cosmic Button Variants */
+  .btn-cosmic {
+    @apply relative px-6 py-3 rounded-xl font-semibold text-primary-foreground;
+    background: var(--gradient-primary);
+    box-shadow: var(--shadow-cosmic);
+    transition: var(--transition-cosmic);
+    border: 1px solid hsl(var(--primary-glow));
+  }
+  
+  .btn-cosmic:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 40px -10px hsla(251, 91%, 60%, 0.4);
+  }
+  
+  .btn-neon {
+    @apply relative px-6 py-3 rounded-xl font-semibold;
+    background: var(--gradient-neon);
+    color: hsl(var(--background));
+    box-shadow: var(--shadow-neon);
+    transition: var(--transition-cosmic);
+    border: 1px solid hsl(var(--neon-cyan));
+  }
+  
+  .btn-neon:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--glow-pulse);
+  }
+  
+  /* Mission Card States */
+  .mission-card {
+    @apply relative p-6 rounded-2xl border transition-all duration-300;
+    background: var(--gradient-card);
+    border-color: hsl(var(--border));
+    box-shadow: var(--shadow-card);
+  }
+  
+  .mission-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 15px 40px hsla(225, 84%, 5%, 0.7);
+  }
+  
+  .mission-card.active {
+    border-color: hsl(var(--mission-active));
+    box-shadow: 0 0 30px hsla(188, 94%, 58%, 0.3);
+  }
+  
+  .mission-card.completed {
+    border-color: hsl(var(--mission-completed));
+    box-shadow: 0 0 20px hsla(142, 71%, 45%, 0.3);
+  }
+  
+  .mission-card.locked {
+    opacity: 0.5;
+    filter: grayscale(0.8);
+    border-color: hsl(var(--mission-locked));
+  }
+  
+  /* XP Progress Bar */
+  .xp-bar {
+    @apply relative w-full h-4 rounded-full overflow-hidden;
+    background: hsl(var(--xp-bg));
+    border: 1px solid hsl(var(--border));
+  }
+  
+  .xp-fill {
+    @apply h-full rounded-full transition-all duration-700 ease-out;
+    background: var(--gradient-neon);
+    box-shadow: 0 0 15px hsla(188, 94%, 58%, 0.5);
+    position: relative;
+  }
+  
+  .xp-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%);
+    animation: xp-shine 2s ease-in-out infinite;
+  }
+  
+  @keyframes xp-shine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  
+  /* Cosmic Input */
+  .input-cosmic {
+    @apply w-full px-4 py-3 rounded-xl border bg-input text-foreground;
+    border-color: hsl(var(--border));
+    transition: var(--transition-cosmic);
+  }
+  
+  .input-cosmic:focus {
+    outline: none;
+    border-color: hsl(var(--accent));
+    box-shadow: 0 0 20px hsla(188, 94%, 58%, 0.3);
+  }
+  
+  /* Glow Effects */
+  .glow-cyan {
+    box-shadow: 0 0 20px hsla(188, 94%, 58%, 0.4);
+  }
+  
+  .glow-magenta {
+    box-shadow: 0 0 20px hsla(292, 84%, 61%, 0.4);
+  }
+  
+  .glow-purple {
+    box-shadow: 0 0 20px hsla(251, 91%, 60%, 0.4);
+  }
+  
+  /* Level Up Animation */
+  @keyframes levelUp {
+    0% { transform: scale(0) rotate(0deg); opacity: 0; }
+    50% { transform: scale(1.2) rotate(180deg); opacity: 1; }
+    100% { transform: scale(1) rotate(360deg); opacity: 1; }
+  }
+  
+  .level-up {
+    animation: levelUp 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+  
+  /* Pulse Animation for Active Elements */
+  @keyframes cosmic-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+  }
+  
+  .pulse-cosmic {
+    animation: cosmic-pulse 2s ease-in-out infinite;
+  }
+}
