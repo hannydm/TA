@@ -10,19 +10,19 @@ import cosmicHero from '@/assets/cosmic-hero.jpg';
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState<LoginFormData>({
-    email: "",
+    username: "",
     password: "",
   });
   const [errors, setErrors] = useState<Partial<LoginFormData>>({});
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { signIn, user } = useAuth();
+  const { signIn, profile } = useAuth();
 
   useEffect(() => {
-    if (user) {
+    if (profile) {
       navigate("/dashboard");
     }
-  }, [user, navigate]);
+  }, [profile, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +31,7 @@ const Login = () => {
 
     try {
       const validatedData = loginSchema.parse(formData);
-      const { error } = await signIn(validatedData.email, validatedData.password);
+      const { error } = await signIn(validatedData.username, validatedData.password);
 
       if (error) {
         toast({
@@ -92,23 +92,23 @@ const Login = () => {
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
-              {/* Email Field */}
+              {/* Username Field */}
               <div className="space-y-1 text-left">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Mail className="w-5 h-5 text-muted-foreground" />
                   </div>
                   <input
-                    type="email"
-                    placeholder="Email"
+                    type="text"
+                    placeholder="Username"
                     className="input-cosmic pl-10"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    value={formData.username}
+                    onChange={(e) => setFormData({...formData, username: e.target.value})}
                     disabled={isLoading}
                   />
                 </div>
-                {errors.email && (
-                  <p className="text-xs text-destructive pl-1">{errors.email}</p>
+                {errors.username && (
+                  <p className="text-xs text-destructive pl-1">{errors.username}</p>
                 )}
               </div>
 

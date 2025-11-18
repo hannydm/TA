@@ -3,10 +3,11 @@ import { User, Rocket, BookOpen, Trophy, LogOut, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { gameState, User as UserType } from '@/lib/gameState';
 import { useAuth } from '@/hooks/useAuth';
+import { buildApiUrl } from '@/lib/api';
 
 const GameLayout = () => {
   const navigate = useNavigate();
-  const { user: authUser, loading, signOut } = useAuth();
+  const { profile, loading, signOut } = useAuth();
   const [user, setUser] = useState<UserType>(gameState.getUser());
 
   useEffect(() => {
@@ -15,10 +16,10 @@ const GameLayout = () => {
   }, []);
 
   useEffect(() => {
-    if (!loading && !authUser) {
+    if (!loading && !profile) {
       navigate('/login');
     }
-  }, [authUser, loading, navigate]);
+  }, [profile, loading, navigate]);
 
   const handleLogout = async () => {
     await signOut();
@@ -35,9 +36,39 @@ const GameLayout = () => {
     );
   }
 
-  if (!authUser) {
+  if (!profile) {
     return null;
   }
+
+  const avatarFallback = (user.name?.charAt(0) || user.username?.charAt(0) || 'E').toUpperCase();
+
+  const renderAvatar = () => {
+    if (user.avatar) {
+      const lower = user.avatar.toLowerCase();
+      const isDefault = lower.includes('default.');
+      const isImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(user.avatar) && !isDefault;
+      if (isImage) {
+        const src = user.avatar.startsWith('http')
+          ? user.avatar
+          : buildApiUrl(
+              user.avatar.startsWith('/')
+                ? user.avatar
+                : `/media/${user.avatar}`
+            );
+        return (
+          <img
+            src={src}
+            alt={user.name}
+            className="w-full h-full rounded-full object-cover"
+          />
+        );
+      }
+      if (user.avatar.length === 1) {
+        return user.avatar.toUpperCase();
+      }
+    }
+    return avatarFallback;
+  };
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: Rocket },
@@ -98,8 +129,8 @@ const GameLayout = () => {
 
               {/* User Avatar & Level */}
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-lg">
-                  {user.avatar}
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-lg text-white overflow-hidden">
+                  {renderAvatar()}
                 </div>
                 <div className="hidden sm:flex flex-col leading-tight">
                   <span className="text-sm font-semibold text-foreground">

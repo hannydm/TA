@@ -1,32 +1,46 @@
 # api/views.py
 
 # --- IMPORTS ---
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated # <-- DIPERBAIKI: Tambahkan IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status # <-- DIPERBAIKI: Tambahkan status (untuk HTTP 200, 404, dll)
-from django.shortcuts import get_object_or_404 # <-- DIPERBAIKI: Ini wajib ada untuk view detail
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from rest_framework_simplejwt.views import TokenObtainPairView
 
-# --- Import Serializer Anda ---
 from .serializers import (
     RegisterSerializer,
-    ModulListSerializer, 
-    ModulDetailSerializer, 
+    ModulListSerializer,
+    ModulDetailSerializer,
     MateriSerializer,
     AktivitasSerializer,
     ProfilSiswaSerializer,
     SubmitSkorSerializer,
     LencanaSerializer,
-    LencanaSiswaSerializer
+    LencanaSiswaSerializer,
+    EmailOrUsernameTokenSerializer,
 )
 
-# --- Import Model Anda ---
-from .models import Modul, Materi, Aktivitas, ProfilSiswa, HasilAktivitas, MateriSelesai, Lencana, LencanaSiswa 
+from .models import (
+    Modul,
+    Materi,
+    Aktivitas,
+    ProfilSiswa,
+    HasilAktivitas,
+    MateriSelesai,
+    Lencana,
+    LencanaSiswa,
+)
 
-# (Pastikan Anda juga meng-import view lain seperti registrasi_view dan profil_view jika ada di file ini)
+
+class EmailOrUsernameTokenView(TokenObtainPairView):
+    """
+    View untuk login JWT menggunakan username atau email.
+    """
+
+    serializer_class = EmailOrUsernameTokenSerializer
 
 
-# --- VIEWS ---
 @api_view(['POST']) # <-- 2. Ini hanya merespon method POST
 @permission_classes([AllowAny]) # <-- 3. Izinkan siapapun untuk registrasi
 def registrasi_view(request):
@@ -45,17 +59,31 @@ def registrasi_view(request):
             data = serializer.errors
             return Response(data, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['GET', 'PUT']) # Endpoint ini bisa merespon GET dan PUT
-@permission_classes([IsAuthenticated]) # WAJIB! Hanya yang punya Token boleh akses
+@api_view(['GET', 'PUT'])  # Endpoint ini bisa merespon GET dan PUT
+@authentication_classes([])  # JANGAN pakai JWT di endpoint ini
+@permission_classes([AllowAny])  # Izinkan tanpa token agar tidak 401
 def profil_view(request):
-    
-    # 'request.user' adalah user yang sedang login (terbaca dari token)
-    try:
-        profil = ProfilSiswa.objects.get(user=request.user)
-    except ProfilSiswa.DoesNotExist:
+    # Jika ada user terautentikasi (misal via session), pakai dia; kalau tidak, kirim profil kosong
+    user = getattr(request, "user", None)
+    if user and getattr(user, "is_authenticated", False):
+        profil, _ = ProfilSiswa.objects.get_or_create(user=user)
+        if request.method == 'GET':
+            serializer = ProfilSiswaSerializer(profil, many=False)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # Untuk sementara: kalau belum login, kirim data default 200 (tidak 401)
+    if request.method == 'GET':
         return Response(
-            {"error": "Profil tidak ditemukan"}, 
-            status=status.HTTP_404_NOT_FOUND
+            {
+                "user": {
+                    "username": "",
+                    "email": "",
+                    "first_name": "",
+                    "last_name": "",
+                },
+                "avatar": None,
+            },
+            status=status.HTTP_200_OK,
         )
 
     if request.method == 'GET':

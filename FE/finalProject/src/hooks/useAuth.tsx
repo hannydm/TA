@@ -1,144 +1,264 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { User as SupabaseUser, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  ReactNode,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { gameState } from '@/lib/gameState';
+import { buildApiUrl, buildApiError, parseJson } from '@/lib/api';
+
+interface ProfileUser {
+  username: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+}
+
+export interface ProfileResponse {
+  id?: number;
+  user: ProfileUser;
+  avatar?: string | null;
+  level?: number;
+  total_poin?: number;
+}
 
 interface AuthContextType {
-  user: SupabaseUser | null;
-  session: Session | null;
+  profile: ProfileResponse | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, username: string) => Promise<{ error: Error | null }>;
-  signOut: () => Promise<void>;
+  signIn: (identifier: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    username: string
+  ) => Promise<{ error: Error | null }>;
+  signOut: () => void;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
+  authFetch: <T = unknown>(path: string, options?: RequestInit) => Promise<T>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const ACCESS_TOKEN_KEY = 'digi_world_access_token';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<SupabaseUser | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : localStorage.getItem(ACCESS_TOKEN_KEY)
+  );
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const syncGameStateUser = (authUser: SupabaseUser | null) => {
-    if (!authUser) {
+  const storeToken = useCallback((access: string | null) => {
+    if (typeof window === 'undefined') return;
+    if (access) {
+      localStorage.setItem(ACCESS_TOKEN_KEY, access);
+    } else {
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+    }
+    setAccessToken(access);
+  }, []);
+
+  const syncGameStateUser = useCallback((apiProfile: ProfileResponse | null) => {
+    if (!apiProfile) {
       gameState.resetUserProfile();
       return;
     }
 
-    const metadata = authUser.user_metadata || {};
     const username =
-      (metadata.username as string) ||
-      (authUser.email ? authUser.email.split('@')[0] : 'explorer');
+      apiProfile.user?.username ||
+      (apiProfile.user?.email ? apiProfile.user.email.split('@')[0] : 'explorer');
     const displayName =
-      (metadata.display_name as string) ||
-      (metadata.full_name as string) ||
-      username;
-    const avatarSource = displayName.trim() || username;
+      [apiProfile.user?.first_name, apiProfile.user?.last_name]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || username;
     const avatar =
-      (metadata.avatar as string) ||
-      (avatarSource.charAt(0) || 'E').toUpperCase();
+      apiProfile.avatar ||
+      displayName.charAt(0).toUpperCase() ||
+      username.charAt(0).toUpperCase() ||
+      'E';
 
-    gameState.resetUserProfile();
+    const level = apiProfile.level ?? 1;
+    const xp = apiProfile.total_poin ?? 0;
+    const maxXp = Math.max(100, level * 100);
+
     gameState.setUserProfile({
-      id: authUser.id,
-      username,
-      name: displayName,
+      id: apiProfile.id ? String(apiProfile.id) : username,
       avatar,
+      name: displayName,
+      username,
+      level,
+      xp,
+      maxXp,
+      badges: [],
     });
-  };
-
-  useEffect(() => {
-    // Set up auth state listener
-    const handleAuthChange = (nextSession: Session | null) => {
-      setSession(nextSession);
-      const nextUser = nextSession?.user ?? null;
-      setUser(nextUser);
-      syncGameStateUser(nextUser);
-      setLoading(false);
-    };
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => handleAuthChange(session)
-    );
-
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      handleAuthChange(session);
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+  const clearAuth = useCallback(() => {
+    storeToken(null);
+    setProfile(null);
+    syncGameStateUser(null);
+  }, [storeToken, syncGameStateUser]);
+
+  const fetchProfile = useCallback(
+    async (tokenOverride?: string | null) => {
+      const token = tokenOverride ?? accessToken;
+      if (!token) {
+        setProfile(null);
+        syncGameStateUser(null);
+        return null;
+      }
+
+      const response = await fetch(buildApiUrl('/api/profil/'), {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
       });
-      
-      if (error) throw error;
-      
-      navigate('/dashboard');
-      return { error: null };
-    } catch (error: any) {
-      return { error };
-    }
-  };
 
-  const signUp = async (email: string, password: string, username: string) => {
-    try {
-      const redirectUrl = `${window.location.origin}/dashboard`;
-      
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            username,
-            display_name: username,
-          }
-        }
-      });
-      
-      if (error) throw error;
-      
-      return { error: null };
-    } catch (error: any) {
-      return { error };
-    }
-  };
+      if (response.status === 401) {
+        // Anggap token tidak valid, bersihkan dan jangan loop.
+        clearAuth();
+        return null;
+      }
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    gameState.resetUserProfile();
-    navigate('/login');
-  };
+      if (!response.ok) {
+        throw await buildApiError(response);
+      }
 
-  const resetPassword = async (email: string) => {
-    try {
-      const redirectUrl = `${window.location.origin}/reset-password`;
-      
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: redirectUrl,
-      });
-      
-      if (error) throw error;
-      
-      return { error: null };
-    } catch (error: any) {
-      return { error };
-    }
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, resetPassword }}>
-      {children}
-    </AuthContext.Provider>
+      const data: ProfileResponse = await response.json();
+      setProfile(data);
+      syncGameStateUser(data);
+      return data;
+    },
+    [accessToken, clearAuth, syncGameStateUser]
   );
+
+  const signIn = useCallback(
+    async (identifier: string, password: string) => {
+      try {
+        const response = await fetch(buildApiUrl('/api/token/'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: identifier, password }),
+        });
+
+        if (!response.ok) {
+          throw await buildApiError(response);
+        }
+
+        const data = await response.json();
+        storeToken(data.access);
+
+        // Karena backend profil masih sederhana, bentuk profil dasar langsung dari username
+        const syntheticProfile: ProfileResponse = {
+          user: {
+            username: identifier,
+            email: '',
+          },
+          avatar: null,
+          level: 1,
+          total_poin: 0,
+        };
+        setProfile(syntheticProfile);
+        syncGameStateUser(syntheticProfile);
+
+        return { error: null };
+      } catch (error: any) {
+        return { error };
+      }
+    },
+    [storeToken, syncGameStateUser]
+  );
+
+  const signUp = useCallback(
+    async (email: string, password: string, username: string) => {
+      try {
+        const response = await fetch(buildApiUrl('/api/registrasi/'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username,
+            email,
+            password,
+            password2: password,
+          }),
+        });
+
+        if (!response.ok) {
+          throw await buildApiError(response);
+        }
+
+        // Setelah registrasi, langsung login.
+        return signIn(username, password);
+      } catch (error: any) {
+        return { error };
+      }
+    },
+    [signIn]
+  );
+
+  const signOut = useCallback(() => {
+    clearAuth();
+    navigate('/login');
+  }, [clearAuth, navigate]);
+
+  const resetPassword = useCallback(async (_email: string) => {
+    return {
+      error: new Error('Password reset belum tersedia.'),
+    };
+  }, []);
+
+  const authFetch = useCallback(
+    async <T,>(path: string, options: RequestInit = {}) => {
+      if (!accessToken) {
+        throw new Error('Not authenticated');
+      }
+      const headers = new Headers(options.headers || {});
+      if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+      }
+      headers.set('Authorization', `Bearer ${accessToken}`);
+
+      const response = await fetch(buildApiUrl(path), { ...options, headers });
+      if (response.status === 401) {
+        clearAuth();
+        throw await buildApiError(response);
+      }
+      if (!response.ok) {
+        throw await buildApiError(response);
+      }
+      return (await parseJson(response)) as T;
+    },
+    [accessToken, clearAuth]
+  );
+
+  const refreshProfile = useCallback(async () => {
+    setLoading(true);
+    try {
+      await fetchProfile();
+    } catch (error) {
+      console.error('Failed to refresh profile', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchProfile]);
+
+  const value: AuthContextType = {
+    profile,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+    resetPassword,
+    authFetch,
+    refreshProfile,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

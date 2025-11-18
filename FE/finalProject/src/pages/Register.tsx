@@ -20,13 +20,13 @@ const Register = () => {
   const [errors, setErrors] = useState<Partial<RegisterFormData>>({});
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { signUp, user } = useAuth();
+  const { signUp, profile } = useAuth();
 
   useEffect(() => {
-    if (user) {
+    if (profile) {
       navigate("/dashboard");
     }
-  }, [user, navigate]);
+  }, [profile, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,6 +182,9 @@ const Register = () => {
                   )}
                 </button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Password minimal 8 karakter, mengandung huruf besar, angka, dan simbol (misalnya ! @ #)
+              </p>
               {errors.password && (
                 <p className="text-sm text-destructive">{errors.password}</p>
               )}

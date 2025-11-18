@@ -1,6 +1,7 @@
 # api/serializers.py
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import ProfilSiswa, Modul, Materi, Aktivitas, SoalPilihanGanda, PilihanJawaban, PilihanJawaban, HasilAktivitas, Lencana, LencanaSiswa, MateriSelesai
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -128,3 +129,20 @@ class LencanaSiswaSerializer(serializers.ModelSerializer):
         model = LencanaSiswa
         # Tentukan field dari model LencanaSiswa Anda
         fields = ['lencana', 'tanggal_didapat']
+
+
+class EmailOrUsernameTokenSerializer(TokenObtainPairSerializer):
+    """
+    Mengizinkan login menggunakan username ATAU email.
+    """
+
+    def validate(self, attrs):
+        username = attrs.get(self.username_field)
+        if username and '@' in username:
+            try:
+                user = User.objects.get(email__iexact=username)
+                attrs[self.username_field] = user.get_username()
+            except User.DoesNotExist:
+                # Biarkan SimpleJWT yang meng-handle error kredensial
+                pass
+        return super().validate(attrs)
