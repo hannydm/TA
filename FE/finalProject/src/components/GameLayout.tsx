@@ -40,35 +40,28 @@ const GameLayout = () => {
     return null;
   }
 
-  const avatarFallback = (user.name?.charAt(0) || user.username?.charAt(0) || 'E').toUpperCase();
+  const displayName = user.name || user.username;
+  const avatarInitial = (
+    displayName?.charAt(0) ||
+    'E'
+  ).toUpperCase();
 
-  const renderAvatar = () => {
-    if (user.avatar) {
-      const lower = user.avatar.toLowerCase();
-      const isDefault = lower.includes('default.');
-      const isImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(user.avatar) && !isDefault;
-      if (isImage) {
-        const src = user.avatar.startsWith('http')
-          ? user.avatar
-          : buildApiUrl(
-              user.avatar.startsWith('/')
-                ? user.avatar
-                : `/media/${user.avatar}`
-            );
-        return (
-          <img
-            src={src}
-            alt={user.name}
-            className="w-full h-full rounded-full object-cover"
-          />
-        );
-      }
-      if (user.avatar.length === 1) {
-        return user.avatar.toUpperCase();
+  const avatarPath = profile.avatar || '';
+  let avatarSrc: string | null = null;
+
+  if (avatarPath) {
+    const lower = avatarPath.toLowerCase();
+    const isDefault = lower.includes('default');
+    if (!isDefault) {
+      if (avatarPath.startsWith('http')) {
+        avatarSrc = avatarPath;
+      } else if (avatarPath.startsWith('/')) {
+        avatarSrc = buildApiUrl(avatarPath);
+      } else {
+        avatarSrc = buildApiUrl(`/media/${avatarPath}`);
       }
     }
-    return avatarFallback;
-  };
+  }
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: Rocket },
@@ -130,7 +123,15 @@ const GameLayout = () => {
               {/* User Avatar & Level */}
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-lg text-white overflow-hidden">
-                  {renderAvatar()}
+                  {avatarSrc ? (
+                    <img
+                      src={avatarSrc}
+                      alt={displayName || 'User avatar'}
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    avatarInitial
+                  )}
                 </div>
                 <div className="hidden sm:flex flex-col leading-tight">
                   <span className="text-sm font-semibold text-foreground">

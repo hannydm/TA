@@ -18,19 +18,27 @@ from django.contrib import admin
 from django.urls import path, include, re_path  # <--- Tambahkan re_path
 from django.views.generic import TemplateView   # <--- Tambahkan TemplateView
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
 )
+from django.conf import settings
+from django.conf.urls.static import static
+from api.views import EmailOrUsernameTokenView
 
 urlpatterns = [
     # 1. Admin dan API Routes (Biarkan di atas)
     path('admin/', admin.site.urls),
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/', EmailOrUsernameTokenView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/', include('api.urls')),
+]
 
-    # 2. React Frontend Integration (WAJIB DI PALING BAWAH)
-    # Pola ini menangkap URL apa saja yang tidak dikenali di atas
-    # dan mengirimkannya ke index.html milik React
+if settings.DEBUG:
+    # Serve uploaded media files (e.g. profile images) in development
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# 2. React Frontend Integration (WAJIB DI PALING BAWAH)
+# Pola ini menangkap URL apa saja yang tidak dikenali di atas
+# dan mengirimkannya ke index.html milik React
+urlpatterns += [
     re_path(r'^.*$', TemplateView.as_view(template_name='index.html')),
 ]

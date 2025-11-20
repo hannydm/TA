@@ -3,11 +3,14 @@ import { User as UserIcon, Trophy, Zap, Lock, CheckCircle, Play } from 'lucide-r
 import { gameState, User, missions, leaderboard } from '@/lib/gameState';
 import XPToast from '@/components/XPToast';
 import LevelUpModal from '@/components/LevelUpModal';
+import { useAuth } from '@/hooks/useAuth';
+import { buildApiUrl } from '@/lib/api';
 
 const Dashboard = () => {
   const [user, setUser] = useState<User>(gameState.getUser());
   const [showXPToast, setShowXPToast] = useState<number | null>(null);
   const [showLevelUp, setShowLevelUp] = useState<number | null>(null);
+  const { profile } = useAuth();
 
   useEffect(() => {
     const unsubscribe = gameState.subscribe(setUser);
@@ -42,6 +45,29 @@ const Dashboard = () => {
 
   const xpPercentage = (user.xp / user.maxXp) * 100;
 
+  const displayName = user.name || profile?.user?.username || user.username;
+  const avatarInitial = (
+    displayName?.charAt(0) ||
+    'E'
+  ).toUpperCase();
+
+  const avatarPath = profile?.avatar || '';
+  let avatarSrc: string | null = null;
+
+  if (avatarPath) {
+    const lower = avatarPath.toLowerCase();
+    const isDefault = lower.includes('default');
+    if (!isDefault) {
+      if (avatarPath.startsWith('http')) {
+        avatarSrc = avatarPath;
+      } else if (avatarPath.startsWith('/')) {
+        avatarSrc = buildApiUrl(avatarPath);
+      } else {
+        avatarSrc = buildApiUrl(`/media/${avatarPath}`);
+      }
+    }
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -51,8 +77,16 @@ const Dashboard = () => {
           <div className="mission-card p-6 space-y-6">
             {/* Avatar & Basic Info */}
             <div className="text-center">
-              <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-3xl mb-4 glow-purple">
-                {user.avatar}
+              <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-3xl mb-4 glow-purple overflow-hidden">
+                {avatarSrc ? (
+                  <img
+                    src={avatarSrc}
+                    alt={displayName || 'User avatar'}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  avatarInitial
+                )}
               </div>
               <h3 className="text-xl font-bold text-foreground">{user.name}</h3>
               <p className="text-neon-cyan font-medium">Explorer • Level {user.level}</p>

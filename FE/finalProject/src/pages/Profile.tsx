@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react';
 import { User as UserIcon, Trophy, Zap, Star, Calendar, Award } from 'lucide-react';
 import { gameState, User, missions } from '@/lib/gameState';
+import { useAuth } from '@/hooks/useAuth';
+import { buildApiUrl } from '@/lib/api';
 
 const Profile = () => {
   const [user, setUser] = useState<User>(gameState.getUser());
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const { profile, authFetch, refreshProfile } = useAuth();
 
   useEffect(() => {
     const unsubscribe = gameState.subscribe(setUser);
@@ -15,6 +21,66 @@ const Profile = () => {
   const xpPercentage = (user.maxXp > 0 ? (user.xp / user.maxXp) : 0) * 100;
   const completionRate = missions.length ? Math.round((completedMissions.length / missions.length) * 100) : 0;
   const streakDays = 0;
+
+  const displayName = user.name || profile?.user?.username || user.username;
+  const avatarInitial = (
+    displayName?.charAt(0) ||
+    'E'
+  ).toUpperCase();
+
+  const avatarPath = profile?.avatar || '';
+  let avatarSrc: string | null = null;
+
+  if (avatarPath) {
+    const lower = avatarPath.toLowerCase();
+    const isDefault = lower.includes('default');
+    if (!isDefault) {
+      if (avatarPath.startsWith('http')) {
+        avatarSrc = avatarPath;
+      } else if (avatarPath.startsWith('/')) {
+        avatarSrc = buildApiUrl(avatarPath);
+      } else {
+        avatarSrc = buildApiUrl(`/media/${avatarPath}`);
+      }
+    }
+  }
+
+  const handleAvatarSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setUploadError(null);
+    const file = event.target.files?.[0];
+    if (!file) {
+      setAvatarFile(null);
+      return;
+    }
+    // Optional: simple client-side size/type guard
+    if (!file.type.startsWith('image/')) {
+      setUploadError('File harus berupa gambar (JPEG/PNG/WebP, dll).');
+      setAvatarFile(null);
+      return;
+    }
+    setAvatarFile(file);
+  };
+
+  const handleAvatarUpload = async () => {
+    if (!avatarFile) return;
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const formData = new FormData();
+      formData.append('avatar', avatarFile);
+      await authFetch('/api/profil/', {
+        method: 'PUT',
+        body: formData,
+      });
+      await refreshProfile();
+      setAvatarFile(null);
+    } catch (error) {
+      console.error('Gagal mengunggah avatar', error);
+      setUploadError('Gagal mengunggah foto profil. Silakan coba lagi.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const badges = [
     { id: 'first_mission', name: 'First Steps', description: 'Complete your first mission', icon: '🎯' },
@@ -40,7 +106,15 @@ const Profile = () => {
             {/* Avatar */}
             <div className="relative">
               <div className="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-6xl glow-purple">
-                {user.avatar}
+                {avatarSrc ? (
+                  <img
+                    src={avatarSrc}
+                    alt={displayName || 'User avatar'}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  avatarInitial
+                )}
               </div>
               <div className="absolute -bottom-2 -right-2 w-12 h-12 rounded-full bg-gradient-to-br from-neon-cyan to-neon-magenta flex items-center justify-center text-sm font-bold text-background">
                 {user.level}
@@ -83,6 +157,34 @@ const Profile = () => {
                     style={{ width: `${xpPercentage}%` }}
                   />
                 </div>
+              </div>
+
+              {/* Avatar Upload */}
+              <div className="mt-6 space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  Ubah Foto Profil
+                </label>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarSelect}
+                    className="text-sm text-muted-foreground"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAvatarUpload}
+                    disabled={!avatarFile || isUploading}
+                    className="btn-neon px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isUploading ? 'Menyimpan...' : 'Simpan Foto'}
+                  </button>
+                </div>
+                {uploadError && (
+                  <p className="text-xs text-destructive mt-1">
+                    {uploadError}
+                  </p>
+                )}
               </div>
             </div>
           </div>

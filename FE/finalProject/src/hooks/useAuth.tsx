@@ -75,10 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .filter(Boolean)
         .join(' ')
         .trim() || username;
+    const avatarSource = (displayName || username).trim();
     const avatar =
-      apiProfile.avatar ||
-      displayName.charAt(0).toUpperCase() ||
-      username.charAt(0).toUpperCase() ||
+      (avatarSource && avatarSource.charAt(0).toUpperCase()) ||
       'E';
 
     const level = apiProfile.level ?? 1;
@@ -153,25 +152,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await response.json();
         storeToken(data.access);
 
-        // Karena backend profil masih sederhana, bentuk profil dasar langsung dari username
-        const syntheticProfile: ProfileResponse = {
-          user: {
-            username: identifier,
-            email: '',
-          },
-          avatar: null,
-          level: 1,
-          total_poin: 0,
-        };
-        setProfile(syntheticProfile);
-        syncGameStateUser(syntheticProfile);
+        // Setelah login, coba ambil profil nyata dari backend.
+        try {
+          await fetchProfile(data.access);
+        } catch (e) {
+          console.error('Gagal mengambil profil setelah login:', e);
+          // Jika gagal, minimal set profil dasar dari username.
+          const fallbackProfile: ProfileResponse = {
+            user: {
+              username: identifier,
+              email: '',
+            },
+            avatar: null,
+            level: 1,
+            total_poin: 0,
+          };
+          setProfile(fallbackProfile);
+          syncGameStateUser(fallbackProfile);
+        }
 
         return { error: null };
       } catch (error: any) {
         return { error };
       }
     },
-    [storeToken, syncGameStateUser]
+    [storeToken, fetchProfile, syncGameStateUser]
   );
 
   const signUp = useCallback(

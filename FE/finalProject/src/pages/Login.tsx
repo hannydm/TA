@@ -34,11 +34,17 @@ const Login = () => {
       const { error } = await signIn(validatedData.username, validatedData.password);
 
       if (error) {
+        const anyError = error as any;
+        let description = error.message || "Login failed";
+
+        // Jika kredensial salah (401 dari backend), tampilkan pesan yang lebih ramah.
+        if (anyError.status === 401) {
+          description = "Username atau password salah. Pastikan sesuai saat registrasi.";
+        }
+
         toast({
           title: "Login Failed",
-          description: error.message === "Invalid login credentials" 
-            ? "Invalid email or password" 
-            : error.message,
+          description,
           variant: "destructive",
         });
       } else {

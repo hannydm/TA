@@ -60,50 +60,26 @@ def registrasi_view(request):
             return Response(data, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET', 'PUT'])  # Endpoint ini bisa merespon GET dan PUT
-@authentication_classes([])  # JANGAN pakai JWT di endpoint ini
-@permission_classes([AllowAny])  # Izinkan tanpa token agar tidak 401
+@permission_classes([IsAuthenticated])  # WAJIB punya JWT untuk akses profil
 def profil_view(request):
-    # Jika ada user terautentikasi (misal via session), pakai dia; kalau tidak, kirim profil kosong
-    user = getattr(request, "user", None)
-    if user and getattr(user, "is_authenticated", False):
-        profil, _ = ProfilSiswa.objects.get_or_create(user=user)
-        if request.method == 'GET':
-            serializer = ProfilSiswaSerializer(profil, many=False)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-
-    # Untuk sementara: kalau belum login, kirim data default 200 (tidak 401)
-    if request.method == 'GET':
-        return Response(
-            {
-                "user": {
-                    "username": "",
-                    "email": "",
-                    "first_name": "",
-                    "last_name": "",
-                },
-                "avatar": None,
-            },
-            status=status.HTTP_200_OK,
-        )
+    # request.user selalu user dari token JWT
+    profil, _ = ProfilSiswa.objects.get_or_create(user=request.user)
 
     if request.method == 'GET':
-        # Ubah objek 'profil' Python menjadi JSON
         serializer = ProfilSiswaSerializer(profil, many=False)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    # PUT: izinkan update avatar saja (level & total_poin tetap dikontrol backend)
     elif request.method == 'PUT':
-        # 'data=request.data' -> Ambil data JSON dari React
-        # 'instance=profil' -> Tentukan objek mana yg mau di-update
-        serializer = ProfilSiswaSerializer(instance=profil, data=request.data, partial=True)
-        # partial=True artinya React boleh kirim 'username' saja tanpa harus
-        # kirim 'total_poin' atau 'avatar' (ini untuk method PATCH)
-        # Jika Anda pakai PUT, hapus 'partial=True'
-
+        serializer = ProfilSiswaSerializer(
+            instance=profil,
+            data=request.data,
+            partial=True,
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
-        
-        # Jika data tidak valid (misal, email formatnya salah)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])

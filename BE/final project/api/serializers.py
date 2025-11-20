@@ -44,15 +44,14 @@ class UserSerializer(serializers.ModelSerializer):
         # Tentukan field User yang boleh dibaca
         fields = ['username', 'email', 'first_name', 'last_name']
 
-#membaca DAN mengubah ProfilSiswa
+# Profil untuk dibaca frontend (level, poin, avatar)
 class ProfilSiswaSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True) 
+    user = UserSerializer(read_only=True)
 
     class Meta:
         model = ProfilSiswa
-        # Tentukan field ProfilSiswa yang boleh dibaca/diubah
-        fields = ['user', 'avatar'] 
-        # (Tambahkan field lain dari model ProfilSiswa Anda, misal 'bio', dll.)
+        fields = ['id', 'user', 'avatar', 'level', 'total_poin']
+        read_only_fields = ['id', 'user', 'level', 'total_poin']
 
 class AktivitasSerializer(serializers.ModelSerializer):
     class Meta:

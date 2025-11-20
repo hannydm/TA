@@ -1,0 +1,623 @@
+TA Project – Documentation
+==========================
+
+1. Project Overview
+-------------------
+
+This repository contains a full‑stack learning game called “Petualangan Informatika”, built with:
+
+- Backend:
+  - Django 5.2.8
+  - Django REST Framework
+  - djangorestframework‑simplejwt (JWT authentication)
+  - MySQL (via PyMySQL)
+- Frontend:
+  - React + TypeScript
+  - Vite
+  - Tailwind / custom CSS utilities
+
+Directory structure (relevant parts):
+
+- `BE/final project/`
+  - `digi_world/` – main Django project
+  - `api/` – Django app for APIs, models, serializers, and admin
+- `FE/finalProject/`
+  - `src/` – React / TypeScript SPA
+  - `dist/` – Vite build output (for production)
+
+
+2. Backend Features (Django API)
+--------------------------------
+
+2.1 Authentication & Users
+--------------------------
+
+Stack:
+- Django auth (`django.contrib.auth`)
+- SimpleJWT for token‑based auth
+
+Key behavior:
+
+- Registration endpoint:
+  - `POST /api/registrasi/`
+  - Request JSON:
+    - `username` – required, unique
+    - `email` – required, valid email
+    - `password` – required
+    - `password2` – confirmation, must match `password`
+  - On success:
+    - Creates a `User`
+    - Creates associated `ProfilSiswa` with:
+      - `level = 1`
+      - `total_poin = 0`
+      - `avatar = 'default.jpg'` (placeholder image)
+
+- Login endpoint (JWT):
+  - `POST /api/token/`
+  - Accepts **username OR email** in the `username` field, plus `password`.
+  - Returns:
+    - `access` – JWT access token
+    - `refresh` – JWT refresh token
+  - If credentials invalid:
+    - Returns HTTP 401 (Unauthorized).
+
+- Token refresh:
+  - `POST /api/token/refresh/`
+  - Request JSON: `{ "refresh": "<refresh_token>" }`
+  - Response: new `access` token.
+
+- Default permissions:
+  - `REST_FRAMEWORK` is configured so that endpoints require JWT authentication by default (`IsAuthenticated`) unless explicitly opened with `AllowAny`.
+
+
+2.2 Profile & Game State
+------------------------
+
+Models (in `api/models.py`):
+
+- `ProfilSiswa`
+  - One‑to‑one with `User`
+  - Fields:
+    - `total_poin` – accumulated XP from activities
+    - `level` – starting at 1
+    - `avatar` – `ImageField` (default `default.jpg`, uploaded to `profile_images/`)
+
+- `HasilAktivitas`
+  - Stores score history for any activity:
+    - `profil_siswa`
+    - `aktivitas`
+    - `skor`
+    - `tanggal_pengerjaan`
+
+- `MateriSelesai`
+  - Tracks which materials are completed by a profile.
+
+- `Lencana` and `LencanaSiswa`
+  - `Lencana` represents a badge definition.
+  - `LencanaSiswa` represents a badge earned by a specific `ProfilSiswa`.
+
+Profile API:
+
+- `GET /api/profil/` – get current user profile (requires JWT):
+  - Auto‑creates a `ProfilSiswa` if it does not exist.
+  - Returns:
+    - `id`
+    - `user` (nested):
+      - `username`
+      - `email`
+      - `first_name`
+      - `last_name`
+    - `avatar` (relative path or default)
+    - `level`
+    - `total_poin`
+
+- `PUT /api/profil/` – update profile (requires JWT):
+  - Currently used mainly for updating `avatar`.
+  - Accepts `multipart/form-data` with `avatar` file.
+  - On success:
+    - Saves uploaded image to `MEDIA_ROOT/profile_images/`.
+    - Returns updated profile data.
+
+
+2.3 Learning Modules, Materials & Activities
+-------------------------------------------
+
+Core models:
+
+- `Modul`
+  - Fields:
+    - `judul` – module title
+    - `deskripsi` – description
+    - `urutan` – order index
+  - Used to group related materials.
+
+- `Materi`
+  - Fields:
+    - `modul` – foreign key to `Modul`
+    - `judul` – material title
+    - `konten_narasi` – narrative/content
+    - `urutan` – order within the module
+
+- `Aktivitas`
+  - One‑to‑one with `Materi`
+  - Fields:
+    - `tipe_aktivitas`:
+      - `PILIHAN_GANDA`
+      - `PUZZLE_CODE`
+      - `DEMO_HTML`
+    - `instruksi` – instructions for students
+    - `poin` – XP awarded on completion
+    - Optional fields for specific activity types:
+      - `kode_jawaban`, `blok_kode_acak`, `validasi_html`, etc.
+
+- `SoalPilihanGanda` & `PilihanJawaban`
+  - For multiple‑choice questions attached to an `Aktivitas`.
+
+API endpoints:
+
+- `GET /api/modul/` – list all modules (requires JWT).
+- `GET /api/modul/<id>/` – get one module with its `materi_set`.
+- `GET /api/materi/<id>/` – get one material with its activity (`aktivitas_set`).
+- `GET /api/aktivitas/<id>/` – get details for one activity.
+
+
+2.4 XP, Completion, and Leaderboard
+-----------------------------------
+
+XP and completion:
+
+- `POST /api/submit-skor/` (requires JWT):
+  - Request JSON:
+    - `aktivitas_id`
+    - `skor`
+  - Behavior:
+    - Creates `HasilAktivitas` record.
+    - Adds `skor` to `profil_siswa.total_poin`.
+
+- `POST /api/tandai-selesai/` (requires JWT):
+  - Request JSON:
+    - `materi_id`
+  - Behavior:
+    - Uses `get_or_create` on `MateriSelesai` to mark a material as completed.
+
+Leaderboard and badges:
+
+- `GET /api/leaderboard/` (requires JWT):
+  - Returns top 10 profiles ordered by `total_poin` (XP).
+  - Each item is serialized via `ProfilSiswaSerializer`.
+  - Used by the React leaderboard page.
+
+- `GET /api/lencana/` (requires JWT):
+  - Lists all available badges (`Lencana`).
+
+- `GET /api/lencana-saya/` (requires JWT):
+  - Lists badges earned by the current user (via `LencanaSiswaSerializer`).
+
+
+2.5 Admin Panel
+---------------
+
+The Django admin is configured at:
+
+- URL: `/admin/`
+
+Custom admin registrations:
+
+- `ProfilSiswa` – with search, filters by level.
+- `Modul` – inline `Materi` editing and count of materials.
+- `Materi` – inline `Aktivitas` editing.
+- `SoalPilihanGanda` – inline `PilihanJawaban`.
+- `Aktivitas`, `Lencana`, `LencanaSiswa`, `HasilAktivitas`, `MateriSelesai`.
+
+Admin site labels:
+
+- `admin.site.site_header = "Digi World Admin"`
+- `admin.site.site_title = "Digi World Admin Panel"`
+- `admin.site.index_title = "Manajemen Modul & Aktivitas"`
+
+
+3. Frontend Features (React/Vite)
+---------------------------------
+
+Key hooks / utilities:
+
+- `src/hooks/useAuth.tsx`
+  - Manages:
+    - JWT access token in `localStorage` (`digi_world_access_token`)
+    - Login (`signIn`)
+    - Registration (`signUp` → calls `/api/registrasi/` then login)
+    - Logout (`signOut`)
+    - Profile fetch (`fetchProfile`, `refreshProfile`)
+    - Authenticated API calls (`authFetch`)
+  - Synchronizes backend profile with a local `gameState` object (level, XP, badges, avatar initial).
+
+- `src/lib/gameState.ts`
+  - Holds client‑side user game state:
+    - `level`, `xp`, `maxXp`, badges, avatar.
+  - Provides:
+    - `getUser()`, `setUserProfile()`, `resetUserProfile()`
+    - `addXP()`, `completeMission()`
+  - Is updated whenever the profile is loaded from the backend.
+
+Main pages:
+
+- `Dashboard.tsx`
+  - Shows:
+    - Left sidebar with user avatar, name, level, XP bar, quick stats.
+    - Mission list from `gameState.missions` with XP rewards and completion state.
+  - Avatar:
+    - Uses backend `profile.avatar` if set (and not default).
+    - Falls back to first letter of the user name.
+
+- `Profile.tsx`
+  - Shows:
+    - Large avatar + level badge.
+    - XP progress, completion rate, fake “consistency” and stats.
+    - Badge grid (based on `user.badges`).
+  - Avatar upload:
+    - File input (`accept="image/*"`).
+    - `Simpan Foto` button:
+      - Sends `PUT` `/api/profil/` with `FormData({ avatar: <file> })` via `authFetch`.
+      - Calls `refreshProfile()` to update avatar everywhere.
+
+- `Materials.tsx`
+  - Shows a list of learning materials (currently static content) linked to missions.
+  - Clicking “Complete & Gain XP” simulates mission completion and updates XP via `gameState`.
+
+- `Quiz.tsx`
+  - Local quiz system using `quizQuestions` from `gameState.ts`.
+  - Calculates score and awards XP locally, with “Excellent / Good / Study more” messages.
+
+- `Leaderboard.tsx`
+  - Calls `GET /api/leaderboard/` via `authFetch`.
+  - Maps API data to display:
+    - Rank, name, XP, avatar initial.
+    - Highlights current logged‑in user.
+
+- `Login.tsx` and `Register.tsx`
+  - Use Zod schemas (`src/lib/validations/auth.ts`) to validate:
+    - Username length/format
+    - Email format
+    - Password strength:
+      - At least 8 characters
+      - Contains uppercase letter
+      - Contains number
+      - Contains symbol (not limited to `!`)
+
+
+4. Configuration & Environment
+------------------------------
+
+Backend environment (`BE/final project/.env` – example):
+
+    DJANGO_SECRET_KEY=your-strong-secret-key
+    DEBUG=False
+    MYSQL_HOST=127.0.0.1
+    MYSQL_PORT=3306
+    MYSQL_DATABASE=digi_world
+    MYSQL_USER=digi_world_user
+    MYSQL_PASSWORD=your-strong-db-password
+
+Frontend environment (`FE/finalProject/.env` – example for production):
+
+    VITE_API_BASE_URL=https://your-backend-domain.com
+
+Important Django settings:
+
+- `ALLOWED_HOSTS` includes your domain / server IP.
+- `CORS_ALLOWED_ORIGINS` includes frontend origin(s) (e.g. `https://your-frontend-domain.com`).
+- Static & media:
+  - `STATIC_URL = 'assets/'`
+  - `STATICFILES_DIRS = [ BASE_DIR / '../../FE/finalProject/dist/assets' ]`
+  - `MEDIA_URL = '/media/'`
+  - `MEDIA_ROOT = BASE_DIR / 'media'`
+
+
+5. Deployment Guide – Debian 13 (CLI)
+-------------------------------------
+
+This section describes a typical deployment flow on a fresh Debian 13 server using only the command line. Adjust paths and domain names as needed.
+
+Assumptions:
+- You have SSH access to the server.
+- You have a non‑root user with `sudo` privileges.
+- You own a domain (optional, but recommended).
+
+
+5.1 System Preparation
+----------------------
+
+Update packages:
+
+    sudo apt update
+    sudo apt upgrade -y
+
+Install required packages:
+
+    sudo apt install -y python3 python3-venv python3-pip \
+        build-essential libmysqlclient-dev \
+        nginx mysql-server git
+
+(Node.js can be installed either from Debian repos or NodeSource; see 5.4.)
+
+
+5.2 MySQL Database Setup
+------------------------
+
+Secure MySQL (optional but recommended):
+
+    sudo mysql_secure_installation
+
+Then create database and user:
+
+    sudo mysql
+
+Inside MySQL shell:
+
+    CREATE DATABASE digi_world CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    CREATE USER 'digi_world_user'@'localhost' IDENTIFIED BY 'your-strong-db-password';
+    GRANT ALL PRIVILEGES ON digi_world.* TO 'digi_world_user'@'localhost';
+    FLUSH PRIVILEGES;
+    EXIT;
+
+Update `BE/final project/.env` accordingly:
+
+    MYSQL_HOST=127.0.0.1
+    MYSQL_PORT=3306
+    MYSQL_DATABASE=digi_world
+    MYSQL_USER=digi_world_user
+    MYSQL_PASSWORD=your-strong-db-password
+
+
+5.3 Backend Deployment (Django + Gunicorn)
+-----------------------------------------
+
+Clone the project (example path `/opt/ta`):
+
+    cd /opt
+    sudo git clone <YOUR_REPO_URL> ta
+    sudo chown -R $USER:$USER ta
+    cd ta/BE/"final project"
+
+Create and activate a virtual environment:
+
+    python3 -m venv venv
+    source venv/bin/activate
+
+Install Python dependencies:
+
+    pip install --upgrade pip
+    pip install -r ../../requirements.txt
+
+Run migrations:
+
+    python manage.py migrate
+
+Create a superuser (for admin panel):
+
+    python manage.py createsuperuser
+
+Collect static (optional if you plan to serve React build via Django; for production with Nginx static, you can also handle it separately):
+
+    python manage.py collectstatic
+
+Test the app with the development server:
+
+    python manage.py runserver 0.0.0.0:8000
+
+If everything works, stop the dev server (Ctrl+C) and set up Gunicorn:
+
+Install Gunicorn into the same venv:
+
+    pip install gunicorn
+
+Test Gunicorn:
+
+    gunicorn digi_world.wsgi:application --bind 127.0.0.1:8000
+
+If that works, stop it and create a systemd service:
+
+Create `/etc/systemd/system/digi_world.service`:
+
+    sudo nano /etc/systemd/system/digi_world.service
+
+Example content:
+
+    [Unit]
+    Description=Digi World Django Application
+    After=network.target
+
+    [Service]
+    User=www-data
+    Group=www-data
+    WorkingDirectory=/opt/ta/BE/final\ project
+    Environment="DJANGO_SETTINGS_MODULE=digi_world.settings"
+    EnvironmentFile=/opt/ta/BE/final\ project/.env
+    ExecStart=/opt/ta/BE/final\ project/venv/bin/gunicorn digi_world.wsgi:application --bind 127.0.0.1:8000
+    Restart=always
+
+    [Install]
+    WantedBy=multi-user.target
+
+Adjust `User`, `Group`, and paths as needed. Then:
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable digi_world
+    sudo systemctl start digi_world
+
+Check status:
+
+    sudo systemctl status digi_world
+
+
+5.4 Frontend Deployment (React/Vite)
+------------------------------------
+
+Install Node.js (LTS) – for example via NodeSource or nvm. NodeSource example:
+
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+    sudo apt install -y nodejs
+
+Then build the frontend:
+
+    cd /opt/ta/FE/finalProject
+    npm install
+    # Set API base URL (edit .env.production or .env)
+    #   VITE_API_BASE_URL=https://your-backend-domain.com
+    npm run build
+
+This produces a `dist/` directory with static assets. In the current Django configuration, `STATICFILES_DIRS` points to:
+
+    ../../FE/finalProject/dist/assets
+
+relative to the backend directory. Ensure that:
+
+- The `dist` folder exists at `/opt/ta/FE/finalProject/dist`.
+
+
+5.5 Nginx Reverse Proxy
+-----------------------
+
+Configure Nginx to:
+
+- Serve the React build at `/`.
+- Proxy API requests to Gunicorn at `127.0.0.1:8000`.
+- Serve media files (uploaded avatars).
+
+Create a new Nginx server block, e.g. `/etc/nginx/sites-available/digi_world`:
+
+    sudo nano /etc/nginx/sites-available/digi_world
+
+Example configuration:
+
+    server {
+        listen 80;
+        server_name your-domain.com;
+
+        # Serve frontend (Vite build)
+        root /opt/ta/FE/finalProject/dist;
+        index index.html;
+
+        location /assets/ {
+            alias /opt/ta/FE/finalProject/dist/assets/;
+            access_log off;
+            expires 30d;
+        }
+
+        # Media (user uploads: avatars, etc.)
+        location /media/ {
+            alias /opt/ta/BE/final\ project/media/;
+        }
+
+        # API (Django via Gunicorn)
+        location /api/ {
+            proxy_pass http://127.0.0.1:8000/api/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # JWT token endpoints
+        location /api/token/ {
+            proxy_pass http://127.0.0.1:8000/api/token/;
+        }
+
+        location /api/token/refresh/ {
+            proxy_pass http://127.0.0.1:8000/api/token/refresh/;
+        }
+
+        # SPA fallback – send all non-API routes to index.html
+        location / {
+            try_files $uri /index.html;
+        }
+    }
+
+Enable the site:
+
+    sudo ln -s /etc/nginx/sites-available/digi_world /etc/nginx/sites-enabled/
+    sudo nginx -t
+    sudo systemctl restart nginx
+
+
+5.6 Production Checklist
+------------------------
+
+Before going live:
+
+- Backend:
+  - `DEBUG = False` in environment or settings.
+  - `ALLOWED_HOSTS` contains your domain and/or IP.
+  - Database user has only necessary privileges.
+  - `SECRET_KEY` is strong and kept out of version control.
+
+- Frontend:
+  - `VITE_API_BASE_URL` set to the correct HTTPS backend URL.
+  - Build artifacts are up‑to‑date (`npm run build`).
+
+- Security & reliability:
+  - Use HTTPS (e.g. via Let’s Encrypt + certbot).
+  - Set up basic monitoring/log rotation.
+  - Regularly back up the MySQL database.
+
+
+6. How to Run Locally (Summary)
+-------------------------------
+
+Backend (from `BE/final project`):
+
+    python -m venv venv
+    source venv/bin/activate        # Windows: venv\Scripts\activate
+    pip install -r ../../requirements.txt
+    python manage.py migrate
+    python manage.py runserver
+
+Frontend (from `FE/finalProject`):
+
+    npm install
+    npm run dev
+
+Then:
+
+- Backend API at: `http://127.0.0.1:8000`
+- Frontend at: `http://localhost:8080`
+
+Make sure `.env` files are configured for local development (e.g. `VITE_API_BASE_URL=http://127.0.0.1:8000`).
+
+
+7. Main User Flows Supported
+----------------------------
+
+- New student registers an account:
+  - Frontend validates input (username, email, password rules).
+  - Backend creates `User` + `ProfilSiswa` (level 1, XP 0).
+
+- Student logs in:
+  - Sends username or email + password to `/api/token/`.
+  - Receives JWT tokens; frontend stores `access` token.
+  - Frontend fetches `/api/profil/` and syncs game state (XP/level).
+
+- Student uploads profile picture:
+  - On Profile page, selects an image file and clicks “Simpan Foto”.
+  - Frontend uploads avatar to `/api/profil/` (PUT, multipart).
+  - Backend saves image and returns updated profile.
+  - Navbar, Dashboard, and Profile display the same avatar.
+
+- Student studies materials and completes quizzes:
+  - Materials page simulates mission completion and XP gain.
+  - Quizzes page tests knowledge and awards XP locally.
+  - Backend endpoints are ready to track real XP via `/api/submit-skor/` and completion via `/api/tandai-selesai/`.
+
+- Leaderboard and badges:
+  - Leaderboard page fetches top users from `/api/leaderboard/`.
+  - Badges endpoints allow listing all badges and badges owned by the current user.
+
+-- Yang Belum Aku Buat --
+"Senang banget dengarnya, sama‑sama!
+
+Kalau nanti kamu mau lanjut lagi—misalnya:
+
+sambung materi & quiz langsung ke data dari admin,
+rapikan tampilan dashboard / leaderboard,
+atau siapin untuk deploy (production ready),
+tinggal bilang aja, kita garap bareng pelan‑pelan."

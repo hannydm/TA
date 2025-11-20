@@ -1,11 +1,68 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Trophy, Medal, Crown, Zap, TrendingUp, Calendar } from 'lucide-react';
 import { leaderboard } from '@/lib/gameState';
+import { useAuth } from '@/hooks/useAuth';
+import type { ProfileResponse } from '@/hooks/useAuth';
+
+type LeaderboardPlayer = {
+  rank: number;
+  name: string;
+  xp: number;
+  avatar: string;
+  isCurrentUser: boolean;
+};
 
 const Leaderboard = () => {
   const [filter, setFilter] = useState<'weekly' | 'overall'>('weekly');
+  const [players, setPlayers] = useState<LeaderboardPlayer[]>([]);
+  const { authFetch, profile } = useAuth();
 
-  const allPlayers = leaderboard;
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadLeaderboard = async () => {
+      try {
+        const data = await authFetch<ProfileResponse[]>('/api/leaderboard/');
+        if (cancelled || !Array.isArray(data)) return;
+
+        const mapped: LeaderboardPlayer[] = data.map((entry, index) => {
+          const username =
+            entry.user?.username ||
+            (entry.user?.email ? entry.user.email.split('@')[0] : 'Explorer');
+          const displayName =
+            [entry.user?.first_name, entry.user?.last_name]
+              .filter(Boolean)
+              .join(' ')
+              .trim() || username;
+          const avatarInitial =
+            (displayName || username).trim().charAt(0).toUpperCase() || 'E';
+
+          const isCurrentUser =
+            !!profile && profile.user?.username === entry.user?.username;
+
+          return {
+            rank: index + 1,
+            name: displayName,
+            xp: entry.total_poin ?? 0,
+            avatar: avatarInitial,
+            isCurrentUser,
+          };
+        });
+
+        setPlayers(mapped);
+      } catch (error) {
+        console.error('Failed to load leaderboard', error);
+      }
+    };
+
+    loadLeaderboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, profile]);
+
+  const allPlayers = players.length > 0 ? players : leaderboard;
   const hasPlayers = allPlayers.length > 0;
   const progressData = hasPlayers
     ? allPlayers.slice(0, 5).map((player, index) => ({
