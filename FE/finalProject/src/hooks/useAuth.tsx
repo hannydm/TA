@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useState,
+  useEffect,
   ReactNode,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -42,6 +43,21 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const ACCESS_TOKEN_KEY = 'digi_world_access_token';
+const LAST_ACTIVE_KEY = 'digi_world_last_active';
+const MAX_IDLE_MS = 10 * 60 * 1000; // 10 minutes
+
+const getLastActive = (): number | null => {
+  if (typeof window === 'undefined') return null;
+  const raw = window.localStorage.getItem(LAST_ACTIVE_KEY);
+  if (!raw) return null;
+  const ts = Number(raw);
+  return Number.isFinite(ts) ? ts : null;
+};
+
+const touchLastActive = () => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(LAST_ACTIVE_KEY, Date.now().toString());
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
@@ -55,8 +71,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window === 'undefined') return;
     if (access) {
       localStorage.setItem(ACCESS_TOKEN_KEY, access);
+      touchLastActive();
     } else {
       localStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(LAST_ACTIVE_KEY);
     }
     setAccessToken(access);
   }, []);
@@ -222,6 +240,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!accessToken) {
         throw new Error('Not authenticated');
       }
+
+       // Cek idle timeout berdasarkan aktivitas terakhir.
+       const last = getLastActive();
+       if (!last || Date.now() - last > MAX_IDLE_MS) {
+         clearAuth();
+         throw new Error('Session expired due to inactivity');
+       }
+
+       touchLastActive();
+
       const headers = new Headers(options.headers || {});
       if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json');
@@ -251,6 +279,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, [fetchProfile]);
+
+  // Saat aplikasi pertama kali dimuat, coba pulihkan sesi
+  useEffect(() => {
+    if (!accessToken) return;
+    const last = getLastActive();
+    if (!last || Date.now() - last > MAX_IDLE_MS) {
+      clearAuth();
+      return;
+    }
+
+    setLoading(true);
+    fetchProfile()
+      .catch((error) => {
+        console.error('Failed to restore session', error);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [accessToken, clearAuth, fetchProfile]);
 
   const value: AuthContextType = {
     profile,

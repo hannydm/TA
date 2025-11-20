@@ -7,6 +7,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from rest_framework_simplejwt.views import TokenObtainPairView
+from django.utils import timezone
+from datetime import timedelta
+from django.db.models import Sum
 
 from .serializers import (
     RegisterSerializer,
@@ -31,6 +34,9 @@ from .models import (
     Lencana,
     LencanaSiswa,
 )
+
+from .serializers import SoalPilihanGandaSerializer
+from .models import SoalPilihanGanda
 
 
 class EmailOrUsernameTokenView(TokenObtainPairView):
@@ -222,6 +228,92 @@ def leaderboard_view(request):
             {"error": f"Terjadi kesalahan: {str(e)}"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def leaderboard_weekly_view(request):
+    """
+    Mengirimkan 10 pengguna dengan total XP TERTINGGI dalam 7 hari terakhir.
+    Nilai XP mingguan dihitung dari penjumlahan HasilAktivitas.skor.
+    """
+    try:
+        tujuh_hari_lalu = timezone.now() - timedelta(days=7)
+
+        # Agregasi skor mingguan per profil_siswa dari HasilAktivitas
+        agregat = (
+            HasilAktivitas.objects
+            .filter(tanggal_pengerjaan__gte=tujuh_hari_lalu)
+            .values('profil_siswa')
+            .annotate(total=Sum('skor'))
+            .order_by('-total')[:10]
+        )
+
+        profil_ids = [row['profil_siswa'] for row in agregat]
+        total_map = {row['profil_siswa']: row['total'] for row in agregat}
+
+        profils = list(ProfilSiswa.objects.filter(id__in=profil_ids))
+        # Urutkan sesuai total skor mingguan
+        profils.sort(key=lambda p: total_map.get(p.id, 0), reverse=True)
+
+        # Override total_poin sementara dengan XP mingguan
+        for p in profils:
+            p.total_poin = total_map.get(p.id, 0)
+
+        serializer = ProfilSiswaSerializer(profils, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response(
+            {"error": f"Terjadi kesalahan: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def leaderboard_stats_view(request):
+    """
+    Statistik global sederhana untuk leaderboard:
+    - total_explorers: jumlah ProfilSiswa
+    - missions_completed: jumlah MateriSelesai
+    - xp_today: total skor HasilAktivitas hari ini
+    - active_now: jumlah profil yang punya aktivitas dalam 15 menit terakhir
+    """
+    try:
+        now = timezone.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        active_window = now - timedelta(minutes=15)
+
+        total_explorers = ProfilSiswa.objects.count()
+        missions_completed = MateriSelesai.objects.count()
+
+        xp_today = (
+            HasilAktivitas.objects
+            .filter(tanggal_pengerjaan__gte=today_start)
+            .aggregate(total=Sum('skor'))['total'] or 0
+        )
+
+        active_now = (
+            HasilAktivitas.objects
+            .filter(tanggal_pengerjaan__gte=active_window)
+            .values('profil_siswa')
+            .distinct()
+            .count()
+        )
+
+        data = {
+            'total_explorers': total_explorers,
+            'missions_completed': missions_completed,
+            'xp_today': xp_today,
+            'active_now': active_now,
+        }
+        return Response(data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response(
+            {"error": f"Terjadi kesalahan: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
     
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -252,3 +344,15 @@ def lencana_saya_view(request):
         return Response({"error": "Profil tidak ditemukan"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def daftar_quiz_view(request):
+    """
+    Mengirimkan daftar aktivitas bertipe PILIHAN_GANDA
+    lengkap dengan soal dan pilihan jawabannya.
+    """
+    aktivitas_list = Aktivitas.objects.filter(tipe_aktivitas='PILIHAN_GANDA')
+    serializer = AktivitasSerializer(aktivitas_list, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)

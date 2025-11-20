@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Brain, Clock, CheckCircle, X, Zap, Trophy, ArrowRight } from 'lucide-react';
 import { quizQuestions } from '@/lib/gameState';
 import XPToast from '@/components/XPToast';
+import { useAuth } from '@/hooks/useAuth';
 
 interface QuizState {
   currentQuestion: number;
@@ -9,6 +10,26 @@ interface QuizState {
   showResults: boolean;
   score: number;
   timeLeft: number;
+}
+
+interface ApiPilihanJawaban {
+  id: number;
+  teks_jawaban: string;
+  apakah_benar: boolean;
+}
+
+interface ApiSoalPilgan {
+  id: number;
+  pertanyaan: string;
+  pilihan: ApiPilihanJawaban[];
+}
+
+interface ApiAktivitasQuiz {
+  id: number;
+  materi: number;
+  instruksi: string;
+  poin: number;
+  soal_pilgan: ApiSoalPilgan[];
 }
 
 const Quiz = () => {
@@ -21,30 +42,79 @@ const Quiz = () => {
     timeLeft: 300 // 5 minutes
   });
   const [showXPToast, setShowXPToast] = useState<number | null>(null);
+  const [apiQuizzes, setApiQuizzes] = useState<ApiAktivitasQuiz[]>([]);
+  const { authFetch, refreshProfile } = useAuth();
 
-  const quizList = [
-    {
-      id: '1',
-      title: 'Introduction to Programming',
-      description: 'Test your understanding of basic programming concepts',
-      questions: quizQuestions['1']?.length || 0,
-      difficulty: 'Beginner',
-      timeLimit: '5 minutes',
-      xpReward: 20
-    },
-    {
-      id: '2',
-      title: 'Data Structures',
-      description: 'Challenge yourself with data structure fundamentals',
-      questions: quizQuestions['2']?.length || 0,
-      difficulty: 'Intermediate',
-      timeLimit: '8 minutes',
-      xpReward: 30
-    }
-  ];
+  useEffect(() => {
+    let cancelled = false;
 
-  const currentQuiz = quizList.find(q => q.id === selectedQuiz);
-  const questions = selectedQuiz ? quizQuestions[selectedQuiz as keyof typeof quizQuestions] || [] : [];
+    const loadQuizzes = async () => {
+      try {
+        const data = await authFetch<ApiAktivitasQuiz[] | any>('/api/quiz/');
+        if (!Array.isArray(data) || cancelled) return;
+        setApiQuizzes(data);
+      } catch (error) {
+        console.error('Gagal memuat quiz dari API, menggunakan data lokal.', error);
+      }
+    };
+
+    loadQuizzes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch]);
+
+  const quizList = apiQuizzes.length
+    ? apiQuizzes.map((q, index) => ({
+        id: String(q.id),
+        title: `Quiz ${index + 1}`,
+        description: q.instruksi || 'Quiz from admin',
+        questions: q.soal_pilgan.length,
+        difficulty: 'Custom',
+        timeLimit: '5 minutes',
+        xpReward: q.poin || 20,
+      }))
+    : [
+        {
+          id: '1',
+          title: 'Introduction to Programming',
+          description: 'Test your understanding of basic programming concepts',
+          questions: quizQuestions['1']?.length || 0,
+          difficulty: 'Beginner',
+          timeLimit: '5 minutes',
+          xpReward: 20,
+        },
+        {
+          id: '2',
+          title: 'Data Structures',
+          description: 'Challenge yourself with data structure fundamentals',
+          questions: quizQuestions['2']?.length || 0,
+          difficulty: 'Intermediate',
+          timeLimit: '8 minutes',
+          xpReward: 30,
+        },
+      ];
+
+  const currentQuiz = quizList.find((q) => q.id === selectedQuiz);
+
+  const questions =
+    selectedQuiz && apiQuizzes.length
+      ? (() => {
+          const apiQuiz = apiQuizzes.find((q) => String(q.id) === selectedQuiz);
+          if (!apiQuiz) return [];
+          return apiQuiz.soal_pilgan.map((s) => ({
+            question: s.pertanyaan,
+            options: s.pilihan.map((p) => p.teks_jawaban),
+            correct: Math.max(
+              0,
+              s.pilihan.findIndex((p) => p.apakah_benar)
+            ),
+          }));
+        })()
+      : selectedQuiz
+      ? quizQuestions[selectedQuiz as keyof typeof quizQuestions] || []
+      : [];
 
   const handleStartQuiz = (quizId: string) => {
     setSelectedQuiz(quizId);
@@ -71,7 +141,7 @@ const Quiz = () => {
     }
   };
 
-  const handleSubmitQuiz = () => {
+  const handleSubmitQuiz = async () => {
     let score = 0;
     questions.forEach((question, index) => {
       if (quizState.selectedAnswers[index] === question.correct) {
@@ -79,7 +149,9 @@ const Quiz = () => {
       }
     });
 
-    const percentage = (score / questions.length) * 100;
+    const percentage = questions.length
+      ? (score / questions.length) * 100
+      : 0;
     let xpGained = currentQuiz?.xpReward || 20;
     
     // Bonus XP for high scores
@@ -89,6 +161,40 @@ const Quiz = () => {
 
     setQuizState({ ...quizState, score, showResults: true });
     setShowXPToast(xpGained);
+
+    // Jika quiz berasal dari backend, simpan hasil ke backend.
+    if (selectedQuiz && apiQuizzes.length) {
+      const apiQuiz = apiQuizzes.find((q) => String(q.id) === selectedQuiz);
+      if (apiQuiz) {
+        try {
+          // Simpan skor sebagai XP ke HasilAktivitas
+          await authFetch('/api/submit-skor/', {
+            method: 'POST',
+            body: JSON.stringify({
+              aktivitas_id: apiQuiz.id,
+              skor: xpGained,
+            }),
+          });
+
+          // Tandai materi terkait sebagai selesai
+          await authFetch('/api/tandai-selesai/', {
+            method: 'POST',
+            body: JSON.stringify({
+              materi_id: apiQuiz.materi,
+            }),
+          });
+        } catch (error) {
+          console.error('Gagal menyimpan hasil quiz ke backend', error);
+        }
+      }
+    }
+
+    // Sinkronkan XP dengan backend setelah quiz selesai
+    try {
+      await refreshProfile();
+    } catch (err) {
+      console.error('Gagal refresh profil setelah quiz', err);
+    }
   };
 
   const handleBackToQuizzes = () => {

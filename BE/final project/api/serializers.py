@@ -1,8 +1,21 @@
-# api/serializers.py
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import ProfilSiswa, Modul, Materi, Aktivitas, SoalPilihanGanda, PilihanJawaban, PilihanJawaban, HasilAktivitas, Lencana, LencanaSiswa, MateriSelesai
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework.exceptions import AuthenticationFailed
+from django.core.cache import cache
+from .models import (
+    ProfilSiswa,
+    Modul,
+    Materi,
+    Aktivitas,
+    SoalPilihanGanda,
+    PilihanJawaban,
+    HasilAktivitas,
+    Lencana,
+    LencanaSiswa,
+    MateriSelesai,
+)
 
 class RegisterSerializer(serializers.ModelSerializer):
     # Field tambahan untuk konfirmasi password
@@ -44,6 +57,7 @@ class UserSerializer(serializers.ModelSerializer):
         # Tentukan field User yang boleh dibaca
         fields = ['username', 'email', 'first_name', 'last_name']
 
+
 # Profil untuk dibaca frontend (level, poin, avatar)
 class ProfilSiswaSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
@@ -53,56 +67,80 @@ class ProfilSiswaSerializer(serializers.ModelSerializer):
         fields = ['id', 'user', 'avatar', 'level', 'total_poin']
         read_only_fields = ['id', 'user', 'level', 'total_poin']
 
+
+class PilihanJawabanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PilihanJawaban
+        fields = ['id', 'teks_jawaban', 'apakah_benar']
+
+
+class SoalPilihanGandaSerializer(serializers.ModelSerializer):
+    pilihan = PilihanJawabanSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SoalPilihanGanda
+        fields = ['id', 'pertanyaan', 'pilihan']
+
+
 class AktivitasSerializer(serializers.ModelSerializer):
+    # Untuk kuis pilihan ganda, sertakan daftar soal+pilihan
+    soal_pilgan = SoalPilihanGandaSerializer(many=True, read_only=True)
+
     class Meta:
         model = Aktivitas
-        # Tentukan field Aktivitas yang boleh dilihat React
-        fields = ['id', 'nama_aktivitas', 'tipe_aktivitas', 'poin']
-        # (Tambahkan field lain dari model Aktivitas Anda jika perlu)
+        # Field aktivitas yang dibutuhkan frontend
+        fields = [
+            'id',
+            'materi',
+            'tipe_aktivitas',
+            'instruksi',
+            'poin',
+            'kode_jawaban',
+            'blok_kode_acak',
+            'validasi_html',
+            'soal_pilgan',
+        ]
 
 
 # 2. Serializer di tengah: Materi
 class MateriSerializer(serializers.ModelSerializer):
-    # 'aktivitas_set' adalah nama relasi baliknya (reverse relation)
-    # Ini akan mengambil SEMUA aktivitas yang terhubung ke materi ini
-    aktivitas_set = AktivitasSerializer(many=True, read_only=True)
+    # Satu aktivitas terkait (OneToOneField dengan related_name='aktivitas')
+    aktivitas = AktivitasSerializer(read_only=True)
 
     class Meta:
         model = Materi
-        # Tentukan field Materi yang boleh dilihat React
+        # Field Materi yang dikirim ke frontend
         fields = [
-            'id', 
-            'nama_materi', 
-            'konten_teks', 
-            'video_embed_url', 
+            'id',
+            'modul',
+            'judul',
+            'konten_narasi',
             'urutan',
-            'aktivitas_set' # <-- Sertakan serializer bersarang
+            'aktivitas',
         ]
-        # (Tambahkan field lain dari model Materi Anda jika perlu)
 
 
 # 3. Serializer paling luar: Modul
 class ModulDetailSerializer(serializers.ModelSerializer):
-    # 'materi_set' adalah relasi balik dari Modul ke Materi
-    # Ini akan mengambil SEMUA materi yang terhubung ke modul ini
+    # Relasi balik dari Modul ke Materi
     materi_set = MateriSerializer(many=True, read_only=True)
 
     class Meta:
         model = Modul
         fields = [
-            'id', 
-            'nama_modul', 
-            'deskripsi', 
-            'thumbnail', 
-            'materi_set' # <-- Sertakan serializer bersarang
+            'id',
+            'judul',
+            'deskripsi',
+            'urutan',
+            'materi_set',
         ]
 
-# Serializer ini khusus untuk daftar modul (tidak perlu detail materi)
+
+# Serializer ini khusus untuk daftar modul (ringkas)
 class ModulListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Modul
-        fields = ['id', 'nama_modul', 'deskripsi', 'thumbnail', 'urutan']
-        # (Tambahkan 'urutan' jika ada di model Modul Anda)
+        fields = ['id', 'judul', 'deskripsi', 'urutan']
 
 class SubmitSkorSerializer(serializers.Serializer):
     # Serializer ini tidak terhubung ke model, 
@@ -132,11 +170,47 @@ class LencanaSiswaSerializer(serializers.ModelSerializer):
 
 class EmailOrUsernameTokenSerializer(TokenObtainPairSerializer):
     """
-    Mengizinkan login menggunakan username ATAU email.
+    Mengizinkan login menggunakan username ATAU email + proteksi bruteforce sederhana.
     """
 
     def validate(self, attrs):
-        username = attrs.get(self.username_field)
+        request = self.context.get('request')
+        raw_identifier = attrs.get(self.username_field) or ''
+
+        # Normalisasi username/email untuk kunci cache
+        identifier = str(raw_identifier).strip().lower()
+
+        # Tentukan IP address dasar
+        ip = None
+        if request is not None:
+            xff = request.META.get('HTTP_X_FORWARDED_FOR')
+            if xff:
+                ip = xff.split(',')[0].strip()
+            else:
+                ip = request.META.get('REMOTE_ADDR')
+
+        user_key = f"bf_user:{identifier}" if identifier else None
+        ip_key = f"bf_ip:{ip}" if ip else None
+
+        max_attempts = 5
+        lock_seconds = 10 * 60  # 10 menit
+
+        # Cek apakah sudah melewati batas percobaan
+        if user_key:
+            user_count = cache.get(user_key, 0)
+            if user_count >= max_attempts:
+                raise AuthenticationFailed(
+                    'Terlalu banyak percobaan login gagal untuk akun ini. Coba lagi nanti.'
+                )
+        if ip_key:
+            ip_count = cache.get(ip_key, 0)
+            if ip_count >= max_attempts:
+                raise AuthenticationFailed(
+                    'Terlalu banyak percobaan login dari alamat IP ini. Coba lagi nanti.'
+                )
+
+        # Izinkan login menggunakan email sebagai pengganti username
+        username = raw_identifier
         if username and '@' in username:
             try:
                 user = User.objects.get(email__iexact=username)
@@ -144,4 +218,23 @@ class EmailOrUsernameTokenSerializer(TokenObtainPairSerializer):
             except User.DoesNotExist:
                 # Biarkan SimpleJWT yang meng-handle error kredensial
                 pass
-        return super().validate(attrs)
+
+        try:
+            data = super().validate(attrs)
+        except (AuthenticationFailed, TokenError) as exc:
+            # Login gagal → tingkatkan hitungan gagal
+            if user_key:
+                count = cache.get(user_key, 0) + 1
+                cache.set(user_key, count, timeout=lock_seconds)
+            if ip_key:
+                count = cache.get(ip_key, 0) + 1
+                cache.set(ip_key, count, timeout=lock_seconds)
+            raise exc
+
+        # Login berhasil → reset hitungan gagal
+        if user_key:
+            cache.delete(user_key)
+        if ip_key:
+            cache.delete(ip_key)
+
+        return data

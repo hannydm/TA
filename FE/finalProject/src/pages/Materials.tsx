@@ -1,122 +1,182 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BookOpen, Play, CheckCircle, Lock, Clock, Zap } from 'lucide-react';
-import { missions, gameState } from '@/lib/gameState';
 import XPToast from '@/components/XPToast';
+import { useAuth } from '@/hooks/useAuth';
+
+type MaterialStatus = 'locked' | 'active' | 'completed';
+
+interface ApiAktivitas {
+  id: number;
+  tipe_aktivitas: string;
+  instruksi: string;
+  poin: number;
+}
+
+interface ApiMateri {
+  id: number;
+  judul: string;
+  konten_narasi: string;
+  urutan: number;
+  aktivitas: ApiAktivitas | null;
+}
+
+interface ApiModulSummary {
+  id: number;
+  judul: string;
+  deskripsi: string;
+  urutan: number;
+}
+
+interface ApiModulDetail {
+  id: number;
+  judul: string;
+  deskripsi: string;
+  urutan: number;
+  materi_set: ApiMateri[];
+}
+
+interface MaterialItem {
+  id: string;
+  backendId: number;
+  title: string;
+  status: MaterialStatus;
+  duration: string;
+  content: string;
+  aktivitasId: number | null;
+  xpReward: number;
+}
 
 const Materials = () => {
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
   const [showXPToast, setShowXPToast] = useState<number | null>(null);
+  const [materials, setMaterials] = useState<MaterialItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [modules, setModules] = useState<ApiModulSummary[]>([]);
+  const [selectedModuleId, setSelectedModuleId] = useState<number | null>(null);
+  const { authFetch, refreshProfile } = useAuth();
 
-  const materials = [
-    {
-      id: '1',
-      title: 'Introduction to Programming',
-      status: missions[0].status,
-      duration: '15 min read',
-      content: `
-        # Welcome to Programming!
-        
-        Programming is the art and science of creating instructions for computers to follow. Think of it as giving directions to a very literal friend who follows instructions exactly as written.
-        
-        ## What is an Algorithm?
-        An algorithm is a step-by-step procedure for solving a problem. Just like a recipe for cooking, algorithms provide clear instructions to achieve a desired outcome.
-        
-        ## Basic Programming Concepts:
-        
-        ### Variables
-        Variables are like containers that store data. They have names and can hold different types of information like numbers, text, or true/false values.
-        
-        ### Control Structures
-        - **Loops**: Repeat actions multiple times
-        - **Conditions**: Make decisions based on different scenarios
-        - **Functions**: Reusable blocks of code
-        
-        ## Your First Steps
-        Every programmer starts with simple concepts and builds up to more complex ideas. The key is practice and patience!
-        
-        Remember: Every expert was once a beginner. Keep exploring, keep learning!
-      `
-    },
-    {
-      id: '2',
-      title: 'Data Structures',
-      status: missions[1].status,
-      duration: '20 min read',
-      content: `
-        # Understanding Data Structures
-        
-        Data structures are ways of organizing and storing data in a computer so that it can be accessed and modified efficiently.
-        
-        ## Arrays
-        Arrays are collections of elements stored in contiguous memory locations. Think of them as a row of mailboxes, each with a specific address.
-        
-        ### Key Properties:
-        - Fixed size (in most languages)
-        - Elements of the same type
-        - Zero-based indexing
-        
-        ## Lists
-        Lists are dynamic arrays that can grow and shrink during runtime. They're more flexible than arrays but may use more memory.
-        
-        ## Stacks and Queues
-        - **Stack**: Last In, First Out (LIFO) - like a stack of plates
-        - **Queue**: First In, First Out (FIFO) - like a line at a store
-        
-        ## Time Complexity
-        Understanding how long operations take is crucial:
-        - Accessing by index: O(1)
-        - Searching: O(n)
-        - Insertion/Deletion: varies by structure
-        
-        Practice with these structures to build your programming foundation!
-      `
-    },
-    {
-      id: '3',
-      title: 'Object-Oriented Programming',
-      status: missions[2].status,
-      duration: '25 min read',
-      content: `
-        # Object-Oriented Programming (OOP)
-        
-        OOP is a programming paradigm that organizes code around objects rather than functions and logic.
-        
-        ## Core Principles
-        
-        ### 1. Encapsulation
-        Bundling data and methods that work on that data within one unit (class). Think of it as a capsule that contains everything needed.
-        
-        ### 2. Inheritance
-        Creating new classes based on existing classes. Like how a sports car inherits basic car properties but adds its own features.
-        
-        ### 3. Polymorphism
-        Objects can take multiple forms. A shape can be a circle, square, or triangle, but all can calculate area differently.
-        
-        ### 4. Abstraction
-        Hiding complex implementation details while showing only essential features. Like driving a car without knowing how the engine works internally.
-        
-        ## Classes and Objects
-        - **Class**: A blueprint for creating objects
-        - **Object**: An instance of a class
-        
-        ## Benefits of OOP
-        - Code reusability
-        - Better organization
-        - Easier maintenance
-        - Real-world modeling
-        
-        OOP helps create more maintainable and scalable software systems!
-      `
+  const mapModuleDetailToMaterials = (modulDetail: ApiModulDetail) => {
+    const mapped: MaterialItem[] = modulDetail.materi_set
+      .sort((a, b) => a.urutan - b.urutan)
+      .map((m) => ({
+        id: String(m.id),
+        backendId: m.id,
+        title: m.judul,
+        status: m.aktivitas ? 'active' as MaterialStatus : 'locked',
+        duration: '~10 min read',
+        content: m.konten_narasi,
+        aktivitasId: m.aktivitas ? m.aktivitas.id : null,
+        xpReward: m.aktivitas ? m.aktivitas.poin : 0,
+      }));
+
+    setMaterials(mapped);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadInitialModuleAndMaterials = async () => {
+      try {
+        // Ambil daftar modul terlebih dahulu
+        const modulList = await authFetch<ApiModulSummary[] | any>('/api/modul/');
+        if (!Array.isArray(modulList) || modulList.length === 0) {
+          if (!cancelled) {
+            setModules([]);
+            setMaterials([]);
+            setLoading(false);
+          }
+          return;
+        }
+
+        // Urutkan modul berdasarkan urutan
+        modulList.sort((a, b) => a.urutan - b.urutan);
+
+        const firstModuleId = modulList[0].id;
+        const modulDetail = await authFetch<ApiModulDetail>(`/api/modul/${firstModuleId}/`);
+
+        if (cancelled) return;
+
+        setModules(modulList);
+        setSelectedModuleId(firstModuleId);
+        mapModuleDetailToMaterials(modulDetail);
+      } catch (error) {
+        console.error('Gagal memuat modul/materi dari API', error);
+        setMaterials([]);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadInitialModuleAndMaterials();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch]);
+
+  const handleChangeModule = async (moduleId: number) => {
+    if (moduleId === selectedModuleId) return;
+    setSelectedMaterial(null);
+    setSelectedModuleId(moduleId);
+    setLoading(true);
+    try {
+      const modulDetail = await authFetch<ApiModulDetail>(`/api/modul/${moduleId}/`);
+      mapModuleDetailToMaterials(modulDetail);
+    } catch (error) {
+      console.error('Gagal memuat materi untuk modul', moduleId, error);
+      setMaterials([]);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const handleMarkComplete = (materialId: string) => {
-    const material = materials.find(m => m.id === materialId);
-    if (material && material.status !== 'completed') {
-      // Mark mission as completed and gain XP
-      gameState.completeMission(materialId);
-      setShowXPToast(10);
+  const handleMarkComplete = async (materialId: string) => {
+    const material = materials.find((m) => m.id === materialId);
+    if (!material || material.status === 'completed') return;
+
+    // Jika tidak terhubung ke aktivitas backend, tandai selesai lokal saja.
+    if (!material.aktivitasId || material.xpReward <= 0) {
+      setMaterials((prev) =>
+        prev.map((m) =>
+          m.id === materialId ? { ...m, status: 'completed' } : m
+        )
+      );
       setSelectedMaterial(null);
+      return;
+    }
+
+    try {
+      // Kirim skor ke backend
+      await authFetch('/api/submit-skor/', {
+        method: 'POST',
+        body: JSON.stringify({
+          aktivitas_id: material.aktivitasId,
+          skor: material.xpReward,
+        }),
+      });
+
+      // Tandai materi selesai di backend
+      await authFetch('/api/tandai-selesai/', {
+        method: 'POST',
+        body: JSON.stringify({
+          materi_id: material.backendId,
+        }),
+      });
+
+      // Update status lokal
+      setMaterials((prev) =>
+        prev.map((m) =>
+          m.id === materialId ? { ...m, status: 'completed' } : m
+        )
+      );
+
+      setShowXPToast(material.xpReward);
+      setSelectedMaterial(null);
+      await refreshProfile();
+    } catch (error) {
+      console.error('Gagal menandai materi selesai', error);
     }
   };
 
@@ -130,6 +190,16 @@ const Materials = () => {
         return <Lock className="w-5 h-5 text-mission-locked" />;
     }
   };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto text-center text-muted-foreground">
+          Loading materials...
+        </div>
+      </div>
+    );
+  }
 
   if (selectedMaterial) {
     const material = materials.find(m => m.id === selectedMaterial);
@@ -230,6 +300,26 @@ const Materials = () => {
           </p>
         </div>
 
+        {/* Module Selector */}
+        {modules.length > 0 && (
+          <div className="mb-6 flex flex-wrap items-center justify-center gap-3">
+            {modules.map((modul) => (
+              <button
+                key={modul.id}
+                type="button"
+                onClick={() => handleChangeModule(modul.id)}
+                className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                  modul.id === selectedModuleId
+                    ? 'bg-neon-cyan text-background border-neon-cyan'
+                    : 'bg-surface/50 text-muted-foreground border-border hover:border-neon-cyan hover:text-neon-cyan'
+                }`}
+              >
+                {modul.judul}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Materials Grid */}
         <div className="grid gap-6">
           {materials.map((material) => (
@@ -268,10 +358,14 @@ const Materials = () => {
                       <Clock className="w-4 h-4" />
                       <span>{material.duration}</span>
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <Zap className="w-4 h-4 text-neon-cyan" />
-                      <span className="text-neon-cyan">+10 XP on completion</span>
-                    </div>
+                    {material.xpReward > 0 && (
+                      <div className="flex items-center space-x-1">
+                        <Zap className="w-4 h-4 text-neon-cyan" />
+                        <span className="text-neon-cyan">
+                          +{material.xpReward} XP on completion
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Status Badge */}

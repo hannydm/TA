@@ -22,7 +22,17 @@ from rest_framework_simplejwt.views import (
 )
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import HttpResponse
 from api.views import EmailOrUsernameTokenView
+
+
+def favicon_view(_: object) -> HttpResponse:
+  """
+  Sederhana: menghindari error TemplateDoesNotExist saat browser meminta /favicon.ico
+  ketika React build (index.html) belum tersedia.
+  """
+  return HttpResponse(status=204)
+
 
 urlpatterns = [
     # 1. Admin dan API Routes (Biarkan di atas)
@@ -30,6 +40,8 @@ urlpatterns = [
     path('api/token/', EmailOrUsernameTokenView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/', include('api.urls')),
+    # Tangani favicon secara eksplisit supaya tidak jatuh ke TemplateView index.html
+    path('favicon.ico', favicon_view, name='favicon'),
 ]
 
 if settings.DEBUG:

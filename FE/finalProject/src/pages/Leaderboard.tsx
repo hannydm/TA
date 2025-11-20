@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Trophy, Medal, Crown, Zap, TrendingUp, Calendar } from 'lucide-react';
-import { leaderboard } from '@/lib/gameState';
 import { useAuth } from '@/hooks/useAuth';
 import type { ProfileResponse } from '@/hooks/useAuth';
 
@@ -12,44 +11,65 @@ type LeaderboardPlayer = {
   isCurrentUser: boolean;
 };
 
+type LeaderboardStats = {
+  total_explorers: number;
+  missions_completed: number;
+  xp_today: number;
+  active_now: number;
+};
+
 const Leaderboard = () => {
   const [filter, setFilter] = useState<'weekly' | 'overall'>('weekly');
-  const [players, setPlayers] = useState<LeaderboardPlayer[]>([]);
+  const [weeklyPlayers, setWeeklyPlayers] = useState<LeaderboardPlayer[]>([]);
+  const [overallPlayers, setOverallPlayers] = useState<LeaderboardPlayer[]>([]);
+  const [stats, setStats] = useState<LeaderboardStats | null>(null);
   const { authFetch, profile } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
 
+    const mapEntries = (data: ProfileResponse[]): LeaderboardPlayer[] =>
+      data.map((entry, index) => {
+        const username =
+          entry.user?.username ||
+          (entry.user?.email ? entry.user.email.split('@')[0] : 'Explorer');
+        const displayName =
+          [entry.user?.first_name, entry.user?.last_name]
+            .filter(Boolean)
+            .join(' ')
+            .trim() || username;
+        const avatarInitial =
+          (displayName || username).trim().charAt(0).toUpperCase() || 'E';
+
+        const isCurrentUser =
+          !!profile && profile.user?.username === entry.user?.username;
+
+        return {
+          rank: index + 1,
+          name: displayName,
+          xp: entry.total_poin ?? 0,
+          avatar: avatarInitial,
+          isCurrentUser,
+        };
+      });
+
     const loadLeaderboard = async () => {
       try {
-        const data = await authFetch<ProfileResponse[]>('/api/leaderboard/');
-        if (cancelled || !Array.isArray(data)) return;
+        const [overallData, weeklyData, statsData] = await Promise.all([
+          authFetch<ProfileResponse[]>('/api/leaderboard/'),
+          authFetch<ProfileResponse[]>('/api/leaderboard/weekly/'),
+          authFetch<LeaderboardStats>('/api/leaderboard/stats/'),
+        ]);
 
-        const mapped: LeaderboardPlayer[] = data.map((entry, index) => {
-          const username =
-            entry.user?.username ||
-            (entry.user?.email ? entry.user.email.split('@')[0] : 'Explorer');
-          const displayName =
-            [entry.user?.first_name, entry.user?.last_name]
-              .filter(Boolean)
-              .join(' ')
-              .trim() || username;
-          const avatarInitial =
-            (displayName || username).trim().charAt(0).toUpperCase() || 'E';
-
-          const isCurrentUser =
-            !!profile && profile.user?.username === entry.user?.username;
-
-          return {
-            rank: index + 1,
-            name: displayName,
-            xp: entry.total_poin ?? 0,
-            avatar: avatarInitial,
-            isCurrentUser,
-          };
-        });
-
-        setPlayers(mapped);
+        if (!cancelled && Array.isArray(overallData)) {
+          setOverallPlayers(mapEntries(overallData));
+        }
+        if (!cancelled && Array.isArray(weeklyData)) {
+          setWeeklyPlayers(mapEntries(weeklyData));
+        }
+        if (!cancelled && statsData) {
+          setStats(statsData);
+        }
       } catch (error) {
         console.error('Failed to load leaderboard', error);
       }
@@ -62,7 +82,10 @@ const Leaderboard = () => {
     };
   }, [authFetch, profile]);
 
-  const allPlayers = players.length > 0 ? players : leaderboard;
+  const allPlayers =
+    filter === 'weekly'
+      ? (weeklyPlayers.length ? weeklyPlayers : overallPlayers)
+      : overallPlayers;
   const hasPlayers = allPlayers.length > 0;
   const progressData = hasPlayers
     ? allPlayers.slice(0, 5).map((player, index) => ({
@@ -310,24 +333,38 @@ const Leaderboard = () => {
                 Global Stats
               </h3>
               
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total Explorers</span>
-                  <span className="font-bold text-neon-cyan">1,247</span>
+              {stats ? (
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Explorers</span>
+                    <span className="font-bold text-neon-cyan">
+                      {stats.total_explorers}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Missions Completed</span>
+                    <span className="font-bold text-neon-magenta">
+                      {stats.missions_completed}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">XP Earned Today</span>
+                    <span className="font-bold text-success">
+                      {stats.xp_today}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Active Now</span>
+                    <span className="font-bold text-warning">
+                      {stats.active_now}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Missions Completed</span>
-                  <span className="font-bold text-neon-magenta">8,392</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">XP Earned Today</span>
-                  <span className="font-bold text-success">12,450</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Active Now</span>
-                  <span className="font-bold text-warning">156</span>
-                </div>
-              </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Stats will appear after explorers start participating.
+                </p>
+              )}
             </div>
           </div>
         </div>

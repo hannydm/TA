@@ -56,10 +56,13 @@ Key behavior:
   - `POST /api/token/`
   - Accepts **username OR email** in the `username` field, plus `password`.
   - Returns:
-    - `access` – JWT access token
-    - `refresh` – JWT refresh token
+    - `access` - JWT access token
+    - `refresh` - JWT refresh token
   - If credentials invalid:
     - Returns HTTP 401 (Unauthorized).
+  - Anti-bruteforce:
+    - Setiap kombinasi username/email dan IP hanya boleh gagal login beberapa kali (default 5) dalam jangka waktu tertentu (10 menit).
+    - Jika melewati batas, backend akan menolak percobaan login berikutnya untuk sementara waktu dan mengirim pesan error yang ramah.
 
 - Token refresh:
   - `POST /api/token/refresh/`
@@ -180,12 +183,23 @@ XP and completion:
   - Behavior:
     - Uses `get_or_create` on `MateriSelesai` to mark a material as completed.
 
+- `GET /api/quiz/` (requires JWT):
+  - Returns all quiz activities (`Aktivitas` with `tipe_aktivitas = 'PILIHAN_GANDA'`), including:
+    - `instruksi`, `poin`
+    - `soal_pilgan` with `pertanyaan` and nested `pilihan` jawaban.
+  - Used by the React `Quiz.tsx` page to render backend-defined quizzes.
+
 Leaderboard and badges:
 
 - `GET /api/leaderboard/` (requires JWT):
   - Returns top 10 profiles ordered by `total_poin` (XP).
   - Each item is serialized via `ProfilSiswaSerializer`.
   - Used by the React leaderboard page.
+
+- `GET /api/leaderboard/weekly/` (requires JWT):
+  - Returns top 10 profiles based on total XP earned in the last 7 days.
+  - XP mingguan dihitung dari penjumlahan `HasilAktivitas.skor` yang `tanggal_pengerjaan`-nya masih dalam 7 hari terakhir.
+  - Diserialisasi dengan `ProfilSiswaSerializer` menggunakan nilai agregat tersebut sebagai `total_poin`.
 
 - `GET /api/lencana/` (requires JWT):
   - Lists all available badges (`Lencana`).
@@ -261,12 +275,17 @@ Main pages:
       - Calls `refreshProfile()` to update avatar everywhere.
 
 - `Materials.tsx`
-  - Shows a list of learning materials (currently static content) linked to missions.
-  - Clicking “Complete & Gain XP” simulates mission completion and updates XP via `gameState`.
+  - Loads modules and materials from the backend via `/api/modul/` and `/api/modul/<id>/`.
+  - Each material uses its associated `Aktivitas` (if any) to determine status (`active`/`locked`) and XP reward.
+  - Clicking "Complete & Gain XP":
+    - Calls `/api/submit-skor/` and `/api/tandai-selesai/` when aktivitas & poin tersedia.
+    - Updates status locally and syncs profile via `refreshProfile()`.
+  - Provides a module selector at the top so students can switch between different modules/chapters defined in the admin.
 
 - `Quiz.tsx`
-  - Local quiz system using `quizQuestions` from `gameState.ts`.
-  - Calculates score and awards XP locally, with “Excellent / Good / Study more” messages.
+  - Tries to load quiz activities from `/api/quiz/` (PILIHAN_GANDA) including questions and choices.
+  - If no backend data is available, falls back to local `quizQuestions` from `gameState.ts`.
+  - Calculates score and awards XP, then refreshes profile to keep XP/level in sync.
 
 - `Leaderboard.tsx`
   - Calls `GET /api/leaderboard/` via `authFetch`.
@@ -604,20 +623,69 @@ Make sure `.env` files are configured for local development (e.g. `VITE_API_BASE
   - Navbar, Dashboard, and Profile display the same avatar.
 
 - Student studies materials and completes quizzes:
-  - Materials page simulates mission completion and XP gain.
-  - Quizzes page tests knowledge and awards XP locally.
-  - Backend endpoints are ready to track real XP via `/api/submit-skor/` and completion via `/api/tandai-selesai/`.
+  - Materials page menampilkan materi dari modul yang dibuat di admin dan, jika ada aktivitas, mengirim XP dan status selesai ke backend melalui `/api/submit-skor/` dan `/api/tandai-selesai/`.
+  - Quizzes page menampilkan kuis dari aktivitas PILIHAN_GANDA (via `/api/quiz/`) bila tersedia, atau fallback ke quiz lokal.
+  - Setelah quiz atau materi selesai, profil direfresh sehingga XP/level di UI sesuai dengan XP di backend.
+
+
+8. Future Enhancements
+----------------------
+
+- Production hardening:
+  - Pisahkan settings `development` dan `production`:
+    - Simpan nilai sensitif (SECRET_KEY, kredensial DB, DEBUG, ALLOWED_HOSTS) hanya di environment (.env) dan jangan di-commit.
+    - Pertimbangkan menggunakan file settings terpisah seperti `settings_dev.py` dan `settings_prod.py` yang mewarisi dari `settings.py`.
+  - Aktifkan HTTPS end-to-end:
+    - Tambahkan sertifikat TLS di Nginx (misalnya via Let's Encrypt + certbot) dan paksa redirect HTTP → HTTPS.
+    - Set `CSRF_COOKIE_SECURE = True`, `SESSION_COOKIE_SECURE = True`, dan `SECURE_HSTS_SECONDS` (HSTS) di mode production.
+  - Keamanan tambahan:
+    - Set `SECURE_REFERRER_POLICY`, `SECURE_CONTENT_TYPE_NOSNIFF`, dan `X_FRAME_OPTIONS` untuk mencegah beberapa kelas serangan umum.
+    - Aktifkan logging terpusat untuk `ERROR`/`WARNING` di Django (file log atau syslog) agar error produksi mudah dipantau.
 
 - Leaderboard and badges:
-  - Leaderboard page fetches top users from `/api/leaderboard/`.
-  - Badges endpoints allow listing all badges and badges owned by the current user.
+  - Perluasan leaderboard:
+    - Tambahkan mode "Weekly" yang benar-benar menggunakan data 7 hari terakhir, misalnya dengan menjumlahkan `HasilAktivitas.skor` yang `tanggal_pengerjaan`-nya masih dalam 7 hari terakhir.
+    - Simpan riwayat peringkat pengguna sehingga siswa dapat melihat progres posisi mereka dari minggu ke minggu.
+  - Integrasi lencana:
+    - Kaitkan logika pemberian lencana (`LencanaSiswa`) dengan event tertentu, misalnya:
+      - Menyelesaikan semua materi dalam satu modul.
+      - Mencapai skor quiz ≥ 80% beberapa kali.
+      - Masuk 3 besar leaderboard.
+    - Tampilkan lencana yang paling "prestisius" langsung di kartu leaderboard dan di profil pengguna.
 
--- Yang Belum Aku Buat --
-"Senang banget dengarnya, sama‑sama!
+- Teacher / admin analytics:
+  - Tambahkan halaman admin khusus (atau dashboard terpisah) untuk melihat:
+    - Progres rata-rata siswa per modul.
+    - Distribusi skor quiz.
+    - Jumlah materi yang selesai per hari/minggu.
+  - Data dapat diambil dari `HasilAktivitas`, `MateriSelesai`, dan `ProfilSiswa.total_poin`.
 
-Kalau nanti kamu mau lanjut lagi—misalnya:
+- Multi-language support:
+  - Gunakan mekanisme i18n di frontend (misalnya react-intl atau solusi sederhana berbasis JSON) untuk mendukung bahasa Inggris dan Indonesia.
+  - Tambahkan toggle bahasa di UI dan sesuaikan teks interface, sementara konten materi tetap dikelola dari admin.
 
-sambung materi & quiz langsung ke data dari admin,
-rapikan tampilan dashboard / leaderboard,
-atau siapin untuk deploy (production ready),
-tinggal bilang aja, kita garap bareng pelan‑pelan."
+
+9. Troubleshooting
+------------------
+
+- MySQL connection refused (`WinError 10061` / OperationalError 2003):
+  - Pastikan service MySQL berjalan:
+    - Windows: buka `services.msc`, cari `MySQL` / `MySQL80`, status harus `Running`.
+    - Linux/Debian: `sudo systemctl status mysql` lalu `sudo systemctl start mysql` jika belum jalan.
+  - Cek konfigurasi di `.env` backend:
+    - `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` harus sesuai dengan user/database yang dibuat.
+
+- Static files warning (`staticfiles.W004` path dist/assets tidak ada):
+  - Ini hanya peringatan jika folder build Vite belum dibuat.
+  - Jalankan di frontend: `npm run build` sehingga `FE/finalProject/dist/assets` muncul.
+  - Untuk development murni (pakai `npm run dev`), peringatan ini bisa diabaikan.
+
+- Login gagal dengan `401 Unauthorized`:
+  - Pastikan login dengan **username atau email** yang sama persis dengan yang dipakai saat registrasi.
+  - Password harus memenuhi aturan:
+    - Minimal 8 karakter, ada huruf besar, angka, dan simbol.
+  - Jika baru mengganti database (misalnya pindah ke MySQL), jalankan `python manage.py migrate` dan pastikan user sudah dibuat di DB tersebut.
+
+- NetworkError from frontend saat memanggil API:
+  - Pastikan backend (`python manage.py runserver`) berjalan di host/port yang sama dengan `VITE_API_BASE_URL` di `.env` frontend.
+  - Periksa juga `CORS_ALLOWED_ORIGINS` di Django settings mencakup origin frontend (misalnya `http://localhost:8080`).
