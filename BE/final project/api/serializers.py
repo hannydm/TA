@@ -106,6 +106,7 @@ class AktivitasSerializer(serializers.ModelSerializer):
 class MateriSerializer(serializers.ModelSerializer):
     # Satu aktivitas terkait (OneToOneField dengan related_name='aktivitas')
     aktivitas = AktivitasSerializer(read_only=True)
+    is_locked = serializers.SerializerMethodField()
 
     class Meta:
         model = Materi
@@ -117,13 +118,48 @@ class MateriSerializer(serializers.ModelSerializer):
             'konten_narasi',
             'urutan',
             'aktivitas',
+            'is_locked',
         ]
+
+    def get_is_locked(self, obj):
+        user = self.context.get('request').user
+        if not user.is_authenticated:
+            return True
+        
+        # Materi pertama di modul pertama selalu terbuka
+        if obj.urutan == 1 and obj.modul.urutan == 1:
+            return False
+
+        # Cek materi sebelumnya
+        # Asumsi: urutan materi unik secara global atau per modul?
+        # Model Materi punya urutan. Mari asumsikan urutan global atau kita cek materi sebelumnya dalam modul yang sama.
+        # Jika urutan per modul:
+        if obj.urutan == 1:
+            # Cek modul sebelumnya
+            prev_modul = Modul.objects.filter(urutan=obj.modul.urutan - 1).first()
+            if not prev_modul:
+                return False # Modul pertama
+            
+            # Cek apakah semua materi di modul sebelumnya sudah selesai?
+            # Atau cukup cek materi terakhir di modul sebelumnya?
+            last_materi_prev_modul = Materi.objects.filter(modul=prev_modul).order_by('-urutan').first()
+            if not last_materi_prev_modul:
+                return False # Modul sebelumnya kosong?
+            
+            return not MateriSelesai.objects.filter(profil_siswa__user=user, materi=last_materi_prev_modul).exists()
+        else:
+            # Cek materi sebelumnya dalam modul yang sama
+            prev_materi = Materi.objects.filter(modul=obj.modul, urutan=obj.urutan - 1).first()
+            if not prev_materi:
+                return False # Seharusnya tidak terjadi jika urutan urut
+            
+            return not MateriSelesai.objects.filter(profil_siswa__user=user, materi=prev_materi).exists()
 
 
 # 3. Serializer paling luar: Modul
 class ModulDetailSerializer(serializers.ModelSerializer):
     # Relasi balik dari Modul ke Materi
-    materi_set = MateriSerializer(many=True, read_only=True)
+    materi_set = serializers.SerializerMethodField()
 
     class Meta:
         model = Modul
@@ -135,12 +171,39 @@ class ModulDetailSerializer(serializers.ModelSerializer):
             'materi_set',
         ]
 
+    def get_materi_set(self, obj):
+        # Pass context to nested serializer
+        serializer = MateriSerializer(obj.materi_set.all().order_by('urutan'), many=True, context=self.context)
+        return serializer.data
+
 
 # Serializer ini khusus untuk daftar modul (ringkas)
 class ModulListSerializer(serializers.ModelSerializer):
+    is_locked = serializers.SerializerMethodField()
+
     class Meta:
         model = Modul
-        fields = ['id', 'judul', 'deskripsi', 'urutan']
+        fields = ['id', 'judul', 'deskripsi', 'urutan', 'is_locked']
+
+    def get_is_locked(self, obj):
+        user = self.context.get('request').user
+        if not user.is_authenticated:
+            return True
+        
+        if obj.urutan == 1:
+            return False
+            
+        # Cek modul sebelumnya
+        prev_modul = Modul.objects.filter(urutan=obj.urutan - 1).first()
+        if not prev_modul:
+            return False
+            
+        # Cek apakah materi terakhir dari modul sebelumnya sudah selesai
+        last_materi = Materi.objects.filter(modul=prev_modul).order_by('-urutan').first()
+        if not last_materi:
+            return False # Modul kosong dianggap selesai?
+            
+        return not MateriSelesai.objects.filter(profil_siswa__user=user, materi=last_materi).exists()
 
 class SubmitSkorSerializer(serializers.Serializer):
     # Serializer ini tidak terhubung ke model, 

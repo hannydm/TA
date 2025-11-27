@@ -241,14 +241,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Not authenticated');
       }
 
-       // Cek idle timeout berdasarkan aktivitas terakhir.
-       const last = getLastActive();
-       if (!last || Date.now() - last > MAX_IDLE_MS) {
-         clearAuth();
-         throw new Error('Session expired due to inactivity');
-       }
+      // Cek idle timeout berdasarkan aktivitas terakhir.
+      const last = getLastActive();
+      // Increase timeout to 24 hours for better UX, or remove strict check if causing issues
+      const EXTENDED_TIMEOUT = 24 * 60 * 60 * 1000;
+      if (!last || Date.now() - last > EXTENDED_TIMEOUT) {
+        clearAuth();
+        throw new Error('Session expired due to inactivity');
+      }
 
-       touchLastActive();
+      touchLastActive();
 
       const headers = new Headers(options.headers || {});
       if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
@@ -284,7 +286,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!accessToken) return;
     const last = getLastActive();
-    if (!last || Date.now() - last > MAX_IDLE_MS) {
+    const EXTENDED_TIMEOUT = 24 * 60 * 60 * 1000;
+    if (!last || Date.now() - last > EXTENDED_TIMEOUT) {
       clearAuth();
       return;
     }

@@ -11,6 +11,10 @@ const Profile = () => {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const { profile, authFetch, refreshProfile } = useAuth();
 
+  const [badges, setBadges] = useState<any[]>([]);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     const unsubscribe = gameState.subscribe(setUser);
     return unsubscribe;
@@ -19,8 +23,12 @@ const Profile = () => {
   const completedMissions = missions.filter(m => m.status === 'completed');
   const totalXpEarned = completedMissions.reduce((sum, m) => sum + m.xpReward, 0);
   const xpPercentage = (user.maxXp > 0 ? (user.xp / user.maxXp) : 0) * 100;
-  const completionRate = missions.length ? Math.round((completedMissions.length / missions.length) * 100) : 0;
-  const streakDays = 0;
+  const totalMissions = 10; // Or fetch from backend if available
+  const completionRate = Math.round((badges.filter(b => b.earned).length / badges.length) * 100) || 0;
+
+  // Calculate streak (simplified: count distinct days in recent activity)
+  const uniqueDays = new Set(recentActivity.map(a => a.time));
+  const streakDays = uniqueDays.size;
 
   const displayName = user.name || profile?.user?.username || user.username;
   const avatarInitial = (
@@ -82,24 +90,57 @@ const Profile = () => {
     }
   };
 
-  const badges = [
-    { id: 'first_mission', name: 'First Steps', description: 'Complete your first mission', icon: '🎯' },
-    { id: 'quiz_master', name: 'Quiz Master', description: 'Score 100% on any quiz', icon: '🧠' },
-    { id: 'speed_learner', name: 'Speed Learner', description: 'Complete 3 missions in one day', icon: '⚡' },
-    { id: 'persistent', name: 'Persistent Explorer', description: 'Study for 7 days straight', icon: '🔥' },
-    { id: 'top_performer', name: 'Top Performer', description: 'Reach top 3 in leaderboard', icon: '👑' },
-    { id: 'knowledge_seeker', name: 'Knowledge Seeker', description: 'Complete all materials', icon: '📚' },
-  ].map(badge => ({
-    ...badge,
-    earned: user.badges.includes(badge.id),
-  }));
 
-  const recentActivity: Array<{ action: string; xp: number; time: string; type: 'mission' | 'badge' | 'quiz' | 'level' }> = [];
+
+  useEffect(() => {
+    const loadProfileData = async () => {
+      try {
+        // 1. Fetch All Badges
+        const allBadges = await authFetch<any[]>('/api/lencana/');
+
+        // 2. Fetch My Badges
+        const myBadges = await authFetch<any[]>('/api/lencana-saya/');
+
+        // 3. Fetch Recent Activity
+        const activityData = await authFetch<any[]>('/api/recent-activity/');
+
+        // Process Badges
+        if (Array.isArray(allBadges) && Array.isArray(myBadges)) {
+          const processedBadges = allBadges.map(b => ({
+            id: b.id,
+            name: b.nama,
+            description: b.deskripsi,
+            icon: '🏆', // Default icon since backend might not send one, or map based on name
+            earned: myBadges.some(mb => mb.lencana.id === b.id)
+          }));
+          setBadges(processedBadges);
+        }
+
+        // Process Activity
+        if (Array.isArray(activityData)) {
+          const mappedActivity = activityData.map(act => ({
+            action: act.title,
+            xp: act.xp,
+            time: new Date(act.date).toLocaleDateString(),
+            type: act.type
+          }));
+          setRecentActivity(mappedActivity);
+        }
+
+      } catch (error) {
+        console.error('Failed to load profile data', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfileData();
+  }, [authFetch]);
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto space-y-8">
-        
+
         {/* Profile Header */}
         <div className="mission-card p-8">
           <div className="flex flex-col md:flex-row items-center md:items-start space-y-6 md:space-y-0 md:space-x-8">
@@ -125,7 +166,7 @@ const Profile = () => {
             <div className="flex-1 text-center md:text-left">
               <h1 className="text-3xl font-bold text-foreground mb-2">{user.name}</h1>
               <p className="text-xl text-neon-cyan font-medium mb-4">@{user.username}</p>
-              
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-neon-cyan">{user.level}</div>
@@ -140,7 +181,7 @@ const Profile = () => {
                   <div className="text-sm text-muted-foreground">Missions</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-warning">{user.badges.length}</div>
+                  <div className="text-2xl font-bold text-warning">{badges.filter(b => b.earned).length}</div>
                   <div className="text-sm text-muted-foreground">Badges</div>
                 </div>
               </div>
@@ -152,8 +193,8 @@ const Profile = () => {
                   <span className="text-neon-cyan font-medium">{user.xp}/{user.maxXp} XP</span>
                 </div>
                 <div className="xp-bar">
-                  <div 
-                    className="xp-fill" 
+                  <div
+                    className="xp-fill"
                     style={{ width: `${xpPercentage}%` }}
                   />
                 </div>
@@ -195,17 +236,17 @@ const Profile = () => {
           <div className="mission-card p-6 text-center">
             <Trophy className="w-8 h-8 text-neon-magenta mx-auto mb-3" />
             <h3 className="text-lg font-semibold text-foreground mb-2">Achievements</h3>
-            <p className="text-3xl font-bold text-neon-magenta mb-1">{user.badges.length}/6</p>
+            <p className="text-3xl font-bold text-neon-magenta mb-1">{badges.filter(b => b.earned).length}/{badges.length}</p>
             <p className="text-sm text-muted-foreground">Badges Earned</p>
           </div>
-          
+
           <div className="mission-card p-6 text-center">
             <Star className="w-8 h-8 text-neon-cyan mx-auto mb-3" />
             <h3 className="text-lg font-semibold text-foreground mb-2">Excellence</h3>
             <p className="text-3xl font-bold text-neon-cyan mb-1">{completionRate}%</p>
             <p className="text-sm text-muted-foreground">Completion Rate</p>
           </div>
-          
+
           <div className="mission-card p-6 text-center">
             <Calendar className="w-8 h-8 text-success mx-auto mb-3" />
             <h3 className="text-lg font-semibold text-foreground mb-2">Consistency</h3>
@@ -220,8 +261,8 @@ const Profile = () => {
             <Award className="w-6 h-6 text-neon-magenta" />
             <h2 className="text-2xl font-bold text-foreground">Badge Collection</h2>
           </div>
-          
-          {user.badges.length === 0 ? (
+
+          {badges.filter(b => b.earned).length === 0 ? (
             <div className="p-6 border border-dashed border-border rounded-xl text-center text-muted-foreground">
               No badges earned yet. Complete missions and quizzes to grow your collection.
             </div>
@@ -262,7 +303,7 @@ const Profile = () => {
             <Zap className="w-6 h-6 text-neon-cyan mr-3" />
             Recent Activity
           </h2>
-          
+
           <div className="space-y-4">
             {recentActivity.length === 0 ? (
               <div className="p-6 border border-dashed border-border rounded-xl text-center text-muted-foreground">
@@ -271,23 +312,22 @@ const Profile = () => {
             ) : (
               recentActivity.map((activity, index) => (
                 <div key={index} className="flex items-center space-x-4 p-4 rounded-lg bg-surface/30 border border-border/50">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    activity.type === 'mission' ? 'bg-mission-completed/20 text-mission-completed' :
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activity.type === 'mission' ? 'bg-mission-completed/20 text-mission-completed' :
                     activity.type === 'badge' ? 'bg-warning/20 text-warning' :
-                    activity.type === 'quiz' ? 'bg-neon-cyan/20 text-neon-cyan' :
-                    'bg-neon-magenta/20 text-neon-magenta'
-                  }`}>
+                      activity.type === 'quiz' ? 'bg-neon-cyan/20 text-neon-cyan' :
+                        'bg-neon-magenta/20 text-neon-magenta'
+                    }`}>
                     {activity.type === 'mission' ? <Star className="w-5 h-5" /> :
-                     activity.type === 'badge' ? <Award className="w-5 h-5" /> :
-                     activity.type === 'quiz' ? <UserIcon className="w-5 h-5" /> :
-                     <Trophy className="w-5 h-5" />}
+                      activity.type === 'badge' ? <Award className="w-5 h-5" /> :
+                        activity.type === 'quiz' ? <UserIcon className="w-5 h-5" /> :
+                          <Trophy className="w-5 h-5" />}
                   </div>
-                  
+
                   <div className="flex-1">
                     <p className="text-foreground font-medium">{activity.action}</p>
                     <p className="text-sm text-muted-foreground">{activity.time}</p>
                   </div>
-                  
+
                   {activity.xp > 0 && (
                     <div className="flex items-center space-x-1 text-neon-cyan font-medium">
                       <Zap className="w-4 h-4" />

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, Play, CheckCircle, Lock, Clock, Zap } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { BookOpen, Play, CheckCircle, Lock, Clock, Zap, ArrowLeft, Menu, Code } from 'lucide-react';
 import XPToast from '@/components/XPToast';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -10,6 +11,9 @@ interface ApiAktivitas {
   tipe_aktivitas: string;
   instruksi: string;
   poin: number;
+  kode_jawaban?: string;
+  blok_kode_acak?: string;
+  validasi_html?: string;
 }
 
 interface ApiMateri {
@@ -18,6 +22,7 @@ interface ApiMateri {
   konten_narasi: string;
   urutan: number;
   aktivitas: ApiAktivitas | null;
+  is_locked: boolean;
 }
 
 interface ApiModulSummary {
@@ -35,148 +40,148 @@ interface ApiModulDetail {
   materi_set: ApiMateri[];
 }
 
-interface MaterialItem {
+interface Material {
   id: string;
   backendId: number;
   title: string;
-  status: MaterialStatus;
   duration: string;
+  status: MaterialStatus;
   content: string;
-  aktivitasId: number | null;
   xpReward: number;
+  aktivitasId?: number;
+  activityType?: string;
+  activityInstruction?: string;
+  activityValidation?: string;
 }
 
 const Materials = () => {
-  const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
-  const [showXPToast, setShowXPToast] = useState<number | null>(null);
-  const [materials, setMaterials] = useState<MaterialItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [modules, setModules] = useState<ApiModulSummary[]>([]);
-  const [selectedModuleId, setSelectedModuleId] = useState<number | null>(null);
+  const { id } = useParams();
+  const navigate = useNavigate();
   const { authFetch, refreshProfile } = useAuth();
 
-  const mapModuleDetailToMaterials = (modulDetail: ApiModulDetail) => {
-    const mapped: MaterialItem[] = modulDetail.materi_set
-      .sort((a, b) => a.urutan - b.urutan)
-      .map((m) => ({
+  const [loading, setLoading] = useState(true);
+  const [modules, setModules] = useState<ApiModulSummary[]>([]);
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
+  const [showXPToast, setShowXPToast] = useState<number | null>(null);
+  const [moduleTitle, setModuleTitle] = useState('');
+
+  // State for Live Code
+  const [userCode, setUserCode] = useState('');
+  const [codeOutput, setCodeOutput] = useState('');
+
+  const mapModuleDetailToMaterials = (detail: ApiModulDetail) => {
+    setModuleTitle(detail.judul);
+
+    const mappedMaterials: Material[] = detail.materi_set.map((m) => {
+      let status: MaterialStatus = 'locked';
+      if (!m.is_locked) {
+        status = 'active';
+      }
+
+      return {
         id: String(m.id),
         backendId: m.id,
         title: m.judul,
-        status: m.aktivitas ? 'active' as MaterialStatus : 'locked',
-        duration: '~10 min read',
+        duration: '10 min',
+        status: status,
         content: m.konten_narasi,
-        aktivitasId: m.aktivitas ? m.aktivitas.id : null,
-        xpReward: m.aktivitas ? m.aktivitas.poin : 0,
-      }));
+        xpReward: m.aktivitas ? m.aktivitas.poin : 10,
+        aktivitasId: m.aktivitas?.id,
+        activityType: m.aktivitas?.tipe_aktivitas,
+        activityInstruction: m.aktivitas?.instruksi,
+        activityValidation: m.aktivitas?.validasi_html,
+      };
+    });
 
-    setMaterials(mapped);
+    setMaterials(mappedMaterials);
   };
 
   useEffect(() => {
     let cancelled = false;
 
-    const loadInitialModuleAndMaterials = async () => {
+    const loadData = async () => {
+      setLoading(true);
       try {
-        // Ambil daftar modul terlebih dahulu
-        const modulList = await authFetch<ApiModulSummary[] | any>('/api/modul/');
-        if (!Array.isArray(modulList) || modulList.length === 0) {
+        // 1. Load all modules for the list
+        const modulesData = await authFetch<ApiModulSummary[]>('/api/modul/');
+        if (!cancelled && Array.isArray(modulesData)) {
+          setModules(modulesData.sort((a, b) => a.urutan - b.urutan));
+        }
+
+        // 2. Load specific module details
+        let targetId = id;
+        if (!targetId && Array.isArray(modulesData) && modulesData.length > 0) {
+          targetId = String(modulesData[0].id);
+        }
+
+        if (targetId) {
+          const modulDetail = await authFetch<ApiModulDetail>(`/api/modul/${targetId}/`);
           if (!cancelled) {
-            setModules([]);
-            setMaterials([]);
-            setLoading(false);
+            mapModuleDetailToMaterials(modulDetail);
           }
-          return;
         }
-
-        // Urutkan modul berdasarkan urutan
-        modulList.sort((a, b) => a.urutan - b.urutan);
-
-        const firstModuleId = modulList[0].id;
-        const modulDetail = await authFetch<ApiModulDetail>(`/api/modul/${firstModuleId}/`);
-
-        if (cancelled) return;
-
-        setModules(modulList);
-        setSelectedModuleId(firstModuleId);
-        mapModuleDetailToMaterials(modulDetail);
       } catch (error) {
-        console.error('Gagal memuat modul/materi dari API', error);
-        setMaterials([]);
+        console.error('Failed to load data', error);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
 
-    loadInitialModuleAndMaterials();
+    loadData();
 
     return () => {
       cancelled = true;
     };
-  }, [authFetch]);
+  }, [id, authFetch]);
 
-  const handleChangeModule = async (moduleId: number) => {
-    if (moduleId === selectedModuleId) return;
-    setSelectedMaterial(null);
-    setSelectedModuleId(moduleId);
-    setLoading(true);
-    try {
-      const modulDetail = await authFetch<ApiModulDetail>(`/api/modul/${moduleId}/`);
-      mapModuleDetailToMaterials(modulDetail);
-    } catch (error) {
-      console.error('Gagal memuat materi untuk modul', moduleId, error);
-      setMaterials([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Reset code when material changes
+  useEffect(() => {
+    setUserCode('');
+    setCodeOutput('');
+  }, [selectedMaterial]);
 
   const handleMarkComplete = async (materialId: string) => {
     const material = materials.find((m) => m.id === materialId);
     if (!material || material.status === 'completed') return;
 
-    // Jika tidak terhubung ke aktivitas backend, tandai selesai lokal saja.
-    if (!material.aktivitasId || material.xpReward <= 0) {
-      setMaterials((prev) =>
-        prev.map((m) =>
-          m.id === materialId ? { ...m, status: 'completed' } : m
-        )
-      );
-      setSelectedMaterial(null);
-      return;
-    }
-
     try {
-      // Kirim skor ke backend
-      await authFetch('/api/submit-skor/', {
-        method: 'POST',
-        body: JSON.stringify({
-          aktivitas_id: material.aktivitasId,
-          skor: material.xpReward,
-        }),
-      });
+      // If it has an activity, submit score
+      if (material.aktivitasId && material.xpReward > 0) {
+        await authFetch('/api/submit-skor/', {
+          method: 'POST',
+          body: JSON.stringify({
+            aktivitas_id: material.aktivitasId,
+            skor: material.xpReward,
+          }),
+        });
+      }
 
-      // Tandai materi selesai di backend
-      await authFetch('/api/tandai-selesai/', {
+      // Always mark as done
+      const response = await authFetch<any>('/api/tandai-selesai/', {
         method: 'POST',
         body: JSON.stringify({
           materi_id: material.backendId,
         }),
       });
 
-      // Update status lokal
+      // Update local state
       setMaterials((prev) =>
         prev.map((m) =>
           m.id === materialId ? { ...m, status: 'completed' } : m
         )
       );
 
-      setShowXPToast(material.xpReward);
+      // Show toast with actual XP gained
+      const xpGained = response.xp_gained || material.xpReward;
+      setShowXPToast(xpGained);
+
       setSelectedMaterial(null);
-      await refreshProfile();
+      if (refreshProfile) {
+        await refreshProfile();
+      }
     } catch (error) {
-      console.error('Gagal menandai materi selesai', error);
+      console.error('Failed to mark complete', error);
     }
   };
 
@@ -193,10 +198,8 @@ const Materials = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto text-center text-muted-foreground">
-          Loading materials...
-        </div>
+      <div className="container mx-auto px-4 py-8 text-center">
+        <div className="animate-pulse text-neon-cyan">Loading materials...</div>
       </div>
     );
   }
@@ -212,19 +215,18 @@ const Materials = () => {
           <div className="flex items-center justify-between mb-6">
             <button
               onClick={() => setSelectedMaterial(null)}
-              className="btn-cosmic px-4 py-2"
+              className="btn-cosmic px-4 py-2 flex items-center"
             >
-              ← Back to Materials
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back to List
             </button>
-            
-            {material.status !== 'completed' && (
+
+            {material.status !== 'completed' && material.activityType !== 'DEMO_HTML' && (
               <button
                 onClick={() => handleMarkComplete(material.id)}
                 className="btn-neon px-6 py-2 flex items-center space-x-2"
-                disabled={material.status === 'locked'}
               >
                 <CheckCircle className="w-4 h-4" />
-                <span>Mark as Completed (+10 XP)</span>
+                <span>Mark as Completed (+{material.xpReward} XP)</span>
               </button>
             )}
           </div>
@@ -246,29 +248,92 @@ const Materials = () => {
             </div>
 
             {/* Material Content */}
-            <div className="prose prose-invert max-w-none">
+            <div className="prose prose-invert max-w-none mb-8">
               <div className="text-foreground leading-relaxed whitespace-pre-line">
                 {material.content}
               </div>
             </div>
 
-            {/* Bottom Action */}
-            {material.status !== 'completed' && (
+            {/* Live Code Activity */}
+            {material.activityType === 'DEMO_HTML' && (
+              <div className="mb-8 p-6 rounded-xl border border-border bg-surface/30">
+                <h3 className="text-xl font-bold text-foreground mb-4 flex items-center">
+                  <Zap className="w-5 h-5 text-neon-cyan mr-2" />
+                  Live Code Challenge (C Language)
+                </h3>
+                <p className="text-muted-foreground mb-4">{material.activityInstruction}</p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col">
+                    <label className="text-sm font-medium text-foreground mb-2 block">Code Editor (C)</label>
+                    <textarea
+                      value={userCode}
+                      onChange={(e) => setUserCode(e.target.value)}
+                      className="w-full h-64 p-4 rounded-lg bg-black/80 border border-border font-mono text-sm text-green-400 focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan mb-2 resize-none"
+                      placeholder={`#include <stdio.h>\n\nint main() {\n    // Write your code here\n    return 0;\n}`}
+                      spellCheck={false}
+                    />
+                    <button
+                      onClick={() => {
+                        // Simple C Simulation
+                        let output = "";
+                        const validation = material.activityValidation || "";
+
+                        // Check if code seems to be C
+                        if (!userCode.includes("main") || !userCode.includes("{") || !userCode.includes("}")) {
+                          output = "Error: Invalid C code structure. Ensure you have a main function.";
+                        }
+                        // Check validation string
+                        else if (validation && !userCode.includes(validation)) {
+                          output = `Error: Code must contain "${validation}"`;
+                        } else {
+                          // Simulate success output
+                          // Extract what's inside printf if possible, or just show success message
+                          const printfMatch = userCode.match(/printf\s*\\(\\s*"([^"]+)"\\s*\\)/);
+                          if (printfMatch) {
+                            output = printfMatch[1];
+                          } else {
+                            output = "Program executed successfully.";
+                          }
+                          output += "\n\n[Process completed with exit code 0]";
+
+                          // Mark as complete if successful
+                          if (material.status !== 'completed') {
+                            handleMarkComplete(material.id);
+                          }
+                        }
+                        setCodeOutput(output);
+                      }}
+                      className="btn-neon px-4 py-2 self-end text-sm"
+                    >
+                      Run Code
+                    </button>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">Terminal Output</label>
+                    <div
+                      className="w-full h-64 p-4 rounded-lg bg-black text-green-500 font-mono text-sm overflow-auto border border-border/50 shadow-inner"
+                    >
+                      <pre className="whitespace-pre-wrap">{codeOutput || "// Output will appear here..."}</pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Bottom Action for Non-Activity Materials */}
+            {material.status !== 'completed' && !material.activityType && (
               <div className="mt-8 p-6 rounded-xl bg-gradient-to-r from-neon-cyan/10 to-neon-magenta/10 border border-neon-cyan/30">
                 <div className="text-center">
                   <h3 className="text-lg font-semibold text-foreground mb-2">
-                    Ready to Continue Your Journey?
+                    Finished Reading?
                   </h3>
-                  <p className="text-muted-foreground mb-4">
-                    Mark this material as completed to gain XP and unlock new adventures!
-                  </p>
                   <button
                     onClick={() => handleMarkComplete(material.id)}
                     className="btn-neon px-8 py-3 flex items-center space-x-2 mx-auto"
-                    disabled={material.status === 'locked'}
                   >
                     <Zap className="w-5 h-5" />
-                    <span>Complete & Gain 10 XP</span>
+                    <span>Complete & Gain {material.xpReward} XP</span>
                   </button>
                 </div>
               </div>
@@ -289,137 +354,112 @@ const Materials = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-neon-cyan to-neon-magenta bg-clip-text text-transparent mb-2">
-            Learning Materials
-          </h1>
-          <p className="text-muted-foreground">
-            Explore the cosmic knowledge base and advance your programming skills
-          </p>
-        </div>
+      <div className="max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
 
-        {/* Module Selector */}
-        {modules.length > 0 && (
-          <div className="mb-6 flex flex-wrap items-center justify-center gap-3">
-            {modules.map((modul) => (
-              <button
-                key={modul.id}
-                type="button"
-                onClick={() => handleChangeModule(modul.id)}
-                className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
-                  modul.id === selectedModuleId
-                    ? 'bg-neon-cyan text-background border-neon-cyan'
-                    : 'bg-surface/50 text-muted-foreground border-border hover:border-neon-cyan hover:text-neon-cyan'
-                }`}
-              >
-                {modul.judul}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Materials Grid */}
-        <div className="grid gap-6">
-          {materials.map((material) => (
-            <div
-              key={material.id}
-              className={`mission-card cursor-pointer ${material.status}`}
-              onClick={() => material.status !== 'locked' && setSelectedMaterial(material.id)}
-            >
-              <div className="flex items-center space-x-6">
-                {/* Icon */}
-                <div className={`w-16 h-16 rounded-xl flex items-center justify-center ${
-                  material.status === 'completed' ? 'bg-mission-completed/20' :
-                  material.status === 'active' ? 'bg-mission-active/20' :
-                  'bg-mission-locked/20'
-                }`}>
-                  <BookOpen className={`w-8 h-8 ${
-                    material.status === 'completed' ? 'text-mission-completed' :
-                    material.status === 'active' ? 'text-mission-active' :
-                    'text-mission-locked'
-                  }`} />
-                </div>
-
-                {/* Content */}
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xl font-semibold text-foreground">
-                      {material.title}
-                    </h3>
-                    <div className="flex items-center space-x-2">
-                      {getStatusIcon(material.status)}
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-4 h-4" />
-                      <span>{material.duration}</span>
-                    </div>
-                    {material.xpReward > 0 && (
-                      <div className="flex items-center space-x-1">
-                        <Zap className="w-4 h-4 text-neon-cyan" />
-                        <span className="text-neon-cyan">
-                          +{material.xpReward} XP on completion
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Status Badge */}
-                  <div className="mt-3">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      material.status === 'completed' ? 'bg-mission-completed/20 text-mission-completed' :
-                      material.status === 'active' ? 'bg-mission-active/20 text-mission-active' :
-                      'bg-mission-locked/20 text-mission-locked'
-                    }`}>
-                      {material.status === 'completed' ? 'Completed' :
-                       material.status === 'active' ? 'Available' :
-                       'Locked'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Arrow */}
-                {material.status !== 'locked' && (
-                  <div className="text-muted-foreground">
-                    <Play className="w-5 h-5 rotate-0" />
-                  </div>
-                )}
+          {/* Sidebar: Module List */}
+          <div className="lg:col-span-1">
+            <div className="mission-card p-4 sticky top-4">
+              <h3 className="text-lg font-bold text-foreground mb-4 flex items-center">
+                <Menu className="w-5 h-5 mr-2 text-neon-cyan" />
+                Modules
+              </h3>
+              <div className="space-y-2">
+                {modules.map((modul) => (
+                  <button
+                    key={modul.id}
+                    onClick={() => navigate(`/modules/${modul.id}`)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${String(modul.id) === id
+                      ? 'bg-neon-cyan/20 text-neon-cyan font-medium border border-neon-cyan/50'
+                      : 'text-muted-foreground hover:bg-surface hover:text-foreground'
+                      }`}
+                  >
+                    {modul.urutan}. {modul.judul}
+                  </button>
+                ))}
               </div>
+              <button
+                onClick={() => navigate('/modules')}
+                className="w-full mt-4 text-xs text-center text-muted-foreground hover:text-neon-cyan underline"
+              >
+                View All Modules
+              </button>
             </div>
-          ))}
-        </div>
+          </div>
 
-        {/* Study Tips */}
-        <div className="mt-12 mission-card p-6">
-          <h2 className="text-xl font-bold text-foreground mb-4 flex items-center">
-            <Zap className="w-5 h-5 text-neon-cyan mr-2" />
-            Study Tips for Space Explorers
-          </h2>
-          
-          <div className="grid md:grid-cols-2 gap-4 text-sm">
-            <div className="space-y-2">
-              <p className="text-foreground font-medium">📚 Active Reading</p>
-              <p className="text-muted-foreground">Take notes and ask questions while reading</p>
+          {/* Main Content: Materials List */}
+          <div className="lg:col-span-3">
+            {/* Header */}
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-neon-cyan to-neon-magenta bg-clip-text text-transparent mb-2">
+                {moduleTitle}
+              </h1>
+              <p className="text-muted-foreground">
+                Complete the materials below to master this module.
+              </p>
             </div>
-            <div className="space-y-2">
-              <p className="text-foreground font-medium">🔄 Practice Regularly</p>
-              <p className="text-muted-foreground">Apply concepts through coding exercises</p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-foreground font-medium">🤝 Join Discussions</p>
-              <p className="text-muted-foreground">Share knowledge with fellow explorers</p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-foreground font-medium">🎯 Set Goals</p>
-              <p className="text-muted-foreground">Complete one material per day for consistency</p>
+
+            <div className="space-y-4">
+              {materials.map((material) => (
+                <div
+                  key={material.id}
+                  onClick={() => {
+                    if (material.status !== 'locked') {
+                      setSelectedMaterial(material.id);
+                    }
+                  }}
+                  className={`mission-card p-6 transition-all duration-300 ${material.status !== 'locked'
+                    ? 'cursor-pointer hover:border-neon-cyan/50 hover:-translate-y-1'
+                    : 'opacity-75 cursor-not-allowed bg-surface/30'
+                    }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start space-x-4">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${material.status === 'completed' ? 'bg-mission-completed/20' :
+                        material.status === 'active' ? 'bg-mission-active/20' :
+                          'bg-mission-locked/20'
+                        }`}>
+                        {getStatusIcon(material.status)}
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-foreground mb-1">
+                          {material.title}
+                        </h3>
+                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                          <div className="flex items-center space-x-1">
+                            <Clock className="w-4 h-4" />
+                            <span>{material.duration}</span>
+                          </div>
+                          {material.xpReward > 0 && (
+                            <div className="flex items-center space-x-1">
+                              <Zap className="w-4 h-4 text-neon-cyan" />
+                              <span className="text-neon-cyan">
+                                +{material.xpReward} XP
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-muted-foreground">
+                      <Play className="w-5 h-5" />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
+
+      {/* XP Toast */}
+      {showXPToast && (
+        <XPToast
+          amount={showXPToast}
+          onComplete={() => setShowXPToast(null)}
+        />
+      )}
     </div>
   );
 };

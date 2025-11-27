@@ -19,4 +19,5 @@ urlpatterns = [
     path('lencana/', views.daftar_lencana_view, name='daftar-lencana'),
     path('lencana-saya/', views.lencana_saya_view, name='lencana-saya'),
     path('quiz/', views.daftar_quiz_view, name='daftar-quiz'),
+    path('recent-activity/', views.recent_activity_view, name='recent-activity'),
 ]

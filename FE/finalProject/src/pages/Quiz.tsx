@@ -67,63 +67,93 @@ const Quiz = () => {
 
   const quizList = apiQuizzes.length
     ? apiQuizzes.map((q, index) => ({
-        id: String(q.id),
-        title: `Quiz ${index + 1}`,
-        description: q.instruksi || 'Quiz from admin',
-        questions: q.soal_pilgan.length,
-        difficulty: 'Custom',
-        timeLimit: '5 minutes',
-        xpReward: q.poin || 20,
-      }))
+      id: String(q.id),
+      title: `Quiz ${index + 1}`,
+      description: q.instruksi || 'Quiz from admin',
+      questions: q.soal_pilgan.length,
+      difficulty: 'Custom',
+      timeLimit: `${q.soal_pilgan.length} minutes`,
+      xpReward: q.poin || 20,
+    }))
     : [
-        {
-          id: '1',
-          title: 'Introduction to Programming',
-          description: 'Test your understanding of basic programming concepts',
-          questions: quizQuestions['1']?.length || 0,
-          difficulty: 'Beginner',
-          timeLimit: '5 minutes',
-          xpReward: 20,
-        },
-        {
-          id: '2',
-          title: 'Data Structures',
-          description: 'Challenge yourself with data structure fundamentals',
-          questions: quizQuestions['2']?.length || 0,
-          difficulty: 'Intermediate',
-          timeLimit: '8 minutes',
-          xpReward: 30,
-        },
-      ];
+      {
+        id: '1',
+        title: 'Introduction to Programming',
+        description: 'Test your understanding of basic programming concepts',
+        questions: quizQuestions['1']?.length || 0,
+        difficulty: 'Beginner',
+        timeLimit: `${quizQuestions['1']?.length || 5} minutes`,
+        xpReward: 20,
+      },
+      {
+        id: '2',
+        title: 'Data Structures',
+        description: 'Challenge yourself with data structure fundamentals',
+        questions: quizQuestions['2']?.length || 0,
+        difficulty: 'Intermediate',
+        timeLimit: `${quizQuestions['2']?.length || 5} minutes`,
+        xpReward: 30,
+      },
+    ];
 
   const currentQuiz = quizList.find((q) => q.id === selectedQuiz);
 
   const questions =
     selectedQuiz && apiQuizzes.length
       ? (() => {
-          const apiQuiz = apiQuizzes.find((q) => String(q.id) === selectedQuiz);
-          if (!apiQuiz) return [];
-          return apiQuiz.soal_pilgan.map((s) => ({
-            question: s.pertanyaan,
-            options: s.pilihan.map((p) => p.teks_jawaban),
-            correct: Math.max(
-              0,
-              s.pilihan.findIndex((p) => p.apakah_benar)
-            ),
-          }));
-        })()
+        const apiQuiz = apiQuizzes.find((q) => String(q.id) === selectedQuiz);
+        if (!apiQuiz) return [];
+        return apiQuiz.soal_pilgan.map((s) => ({
+          question: s.pertanyaan,
+          options: s.pilihan.map((p) => p.teks_jawaban),
+          correct: Math.max(
+            0,
+            s.pilihan.findIndex((p) => p.apakah_benar)
+          ),
+        }));
+      })()
       : selectedQuiz
-      ? quizQuestions[selectedQuiz as keyof typeof quizQuestions] || []
-      : [];
+        ? quizQuestions[selectedQuiz as keyof typeof quizQuestions] || []
+        : [];
+
+  // Timer Logic
+  useEffect(() => {
+    if (!selectedQuiz || quizState.showResults) return;
+
+    const timer = setInterval(() => {
+      setQuizState((prev) => {
+        if (prev.timeLeft <= 1) {
+          clearInterval(timer);
+          handleSubmitQuiz(); // Auto submit
+          return { ...prev, timeLeft: 0 };
+        }
+        return { ...prev, timeLeft: prev.timeLeft - 1 };
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [selectedQuiz, quizState.showResults]);
 
   const handleStartQuiz = (quizId: string) => {
     setSelectedQuiz(quizId);
+
+    // Calculate time based on number of questions (1 minute per question)
+    let questionCount = 0;
+    if (apiQuizzes.length > 0) {
+      const apiQuiz = apiQuizzes.find(q => String(q.id) === quizId);
+      questionCount = apiQuiz ? apiQuiz.soal_pilgan.length : 0;
+    } else {
+      questionCount = quizQuestions[quizId as keyof typeof quizQuestions]?.length || 0;
+    }
+
+    const calculatedTime = questionCount * 60; // 60 seconds per question
+
     setQuizState({
       currentQuestion: 0,
       selectedAnswers: [],
       showResults: false,
       score: 0,
-      timeLeft: 300
+      timeLeft: calculatedTime > 0 ? calculatedTime : 300 // Default to 5 mins if 0 questions (shouldn't happen)
     });
   };
 
@@ -142,25 +172,36 @@ const Quiz = () => {
   };
 
   const handleSubmitQuiz = async () => {
-    let score = 0;
+    // Calculate score based on points per question
+    // Total points for the quiz (e.g. 20 XP or from API)
+    const totalQuizPoints = currentQuiz?.xpReward || 20;
+    const pointsPerQuestion = questions.length > 0 ? totalQuizPoints / questions.length : 0;
+
+    let calculatedScore = 0;
+    let correctCount = 0;
+
     questions.forEach((question, index) => {
       if (quizState.selectedAnswers[index] === question.correct) {
-        score++;
+        calculatedScore += pointsPerQuestion;
+        correctCount++;
       }
+      // Wrong answer = 0 points for that question (already handled by not adding)
     });
 
-    const percentage = questions.length
-      ? (score / questions.length) * 100
-      : 0;
-    let xpGained = currentQuiz?.xpReward || 20;
-    
-    // Bonus XP for high scores
-    if (percentage >= 80) {
-      xpGained += 30;
+    // Round to nearest integer
+    const finalScore = Math.round(calculatedScore);
+    const percentage = questions.length ? (correctCount / questions.length) * 100 : 0;
+
+    // Bonus XP for high scores (only if not 0)
+    let bonusXP = 0;
+    if (percentage >= 80 && finalScore > 0) {
+      bonusXP = 30;
     }
 
-    setQuizState({ ...quizState, score, showResults: true });
-    setShowXPToast(xpGained);
+    const totalXPGained = finalScore + bonusXP;
+
+    setQuizState(prev => ({ ...prev, score: correctCount, showResults: true }));
+    setShowXPToast(totalXPGained);
 
     // Jika quiz berasal dari backend, simpan hasil ke backend.
     if (selectedQuiz && apiQuizzes.length) {
@@ -168,13 +209,19 @@ const Quiz = () => {
       if (apiQuiz) {
         try {
           // Simpan skor sebagai XP ke HasilAktivitas
-          await authFetch('/api/submit-skor/', {
+          const response = await authFetch<any>('/api/submit-skor/', {
             method: 'POST',
             body: JSON.stringify({
               aktivitas_id: apiQuiz.id,
-              skor: xpGained,
+              skor: totalXPGained,
             }),
           });
+
+          // Handle Level Up & Badges from response
+          if (response.level_up) {
+            // You might want to show a level up modal here, but Dashboard handles it via state.
+            // We can trigger a refresh profile to update local state.
+          }
 
           // Tandai materi terkait sebagai selesai
           await authFetch('/api/tandai-selesai/', {
@@ -220,16 +267,14 @@ const Quiz = () => {
           <div className="mission-card p-8 text-center">
             {/* Results Header */}
             <div className="mb-8">
-              <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-4 ${
-                isExcellent ? 'bg-gradient-to-br from-neon-cyan to-neon-magenta glow-cyan' :
+              <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-4 ${isExcellent ? 'bg-gradient-to-br from-neon-cyan to-neon-magenta glow-cyan' :
                 isGood ? 'bg-success/20' : 'bg-warning/20'
-              }`}>
-                <Trophy className={`w-10 h-10 ${
-                  isExcellent ? 'text-background' :
+                }`}>
+                <Trophy className={`w-10 h-10 ${isExcellent ? 'text-background' :
                   isGood ? 'text-success' : 'text-warning'
-                }`} />
+                  }`} />
               </div>
-              
+
               <h2 className="text-3xl font-bold text-foreground mb-2">
                 Quiz Completed!
               </h2>
@@ -241,10 +286,9 @@ const Quiz = () => {
             {/* Score Display */}
             <div className="space-y-6 mb-8">
               <div className="text-center">
-                <div className={`text-6xl font-bold mb-2 ${
-                  isExcellent ? 'text-neon-cyan' :
+                <div className={`text-6xl font-bold mb-2 ${isExcellent ? 'text-neon-cyan' :
                   isGood ? 'text-success' : 'text-warning'
-                }`}>
+                  }`}>
                   {percentage.toFixed(0)}%
                 </div>
                 <p className="text-xl text-foreground">
@@ -253,18 +297,16 @@ const Quiz = () => {
               </div>
 
               {/* Performance Message */}
-              <div className={`p-4 rounded-xl ${
-                isExcellent ? 'bg-neon-cyan/20 border border-neon-cyan/50' :
+              <div className={`p-4 rounded-xl ${isExcellent ? 'bg-neon-cyan/20 border border-neon-cyan/50' :
                 isGood ? 'bg-success/20 border border-success/50' :
-                'bg-warning/20 border border-warning/50'
-              }`}>
-                <p className={`font-medium ${
-                  isExcellent ? 'text-neon-cyan' :
-                  isGood ? 'text-success' : 'text-warning'
+                  'bg-warning/20 border border-warning/50'
                 }`}>
+                <p className={`font-medium ${isExcellent ? 'text-neon-cyan' :
+                  isGood ? 'text-success' : 'text-warning'
+                  }`}>
                   {isExcellent ? '🌟 Excellent! Space Commander Performance!' :
-                   isGood ? '👍 Good Work! Keep Exploring!' :
-                   '📚 Study More to Master the Cosmos!'}
+                    isGood ? '👍 Good Work! Keep Exploring!' :
+                      '📚 Study More to Master the Cosmos!'}
                 </p>
               </div>
 
@@ -336,7 +378,7 @@ const Quiz = () => {
             </div>
 
             <h1 className="text-2xl font-bold text-foreground mb-2">{currentQuiz?.title}</h1>
-            
+
             {/* Progress Bar */}
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
@@ -365,18 +407,16 @@ const Quiz = () => {
                 <button
                   key={index}
                   onClick={() => handleAnswerSelect(index)}
-                  className={`w-full p-4 rounded-xl border text-left transition-all duration-200 ${
-                    quizState.selectedAnswers[quizState.currentQuestion] === index
-                      ? 'border-neon-cyan bg-neon-cyan/20 text-neon-cyan'
-                      : 'border-border bg-surface/30 text-foreground hover:border-neon-cyan/50 hover:bg-neon-cyan/10'
-                  }`}
+                  className={`w-full p-4 rounded-xl border text-left transition-all duration-200 ${quizState.selectedAnswers[quizState.currentQuestion] === index
+                    ? 'border-neon-cyan bg-neon-cyan/20 text-neon-cyan'
+                    : 'border-border bg-surface/30 text-foreground hover:border-neon-cyan/50 hover:bg-neon-cyan/10'
+                    }`}
                 >
                   <div className="flex items-center space-x-3">
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                      quizState.selectedAnswers[quizState.currentQuestion] === index
-                        ? 'border-neon-cyan bg-neon-cyan'
-                        : 'border-muted-foreground'
-                    }`}>
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${quizState.selectedAnswers[quizState.currentQuestion] === index
+                      ? 'border-neon-cyan bg-neon-cyan'
+                      : 'border-muted-foreground'
+                      }`}>
                       {quizState.selectedAnswers[quizState.currentQuestion] === index && (
                         <CheckCircle className="w-4 h-4 text-background" />
                       )}
@@ -396,7 +436,7 @@ const Quiz = () => {
               >
                 Previous
               </button>
-              
+
               <button
                 onClick={handleNext}
                 disabled={quizState.selectedAnswers[quizState.currentQuestion] === undefined}
@@ -489,7 +529,7 @@ const Quiz = () => {
             <Zap className="w-5 h-5 text-neon-cyan mr-2" />
             Quiz Mastery Tips
           </h2>
-          
+
           <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-3">
               <div className="flex items-start space-x-3">
@@ -511,7 +551,7 @@ const Quiz = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="space-y-3">
               <div className="flex items-start space-x-3">
                 <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">

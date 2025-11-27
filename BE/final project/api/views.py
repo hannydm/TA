@@ -104,7 +104,7 @@ def daftar_modul_view(request):
     # .all() tidak akan error jika hasilnya kosong. Ini akan 
     # mengembalikan list kosong [ ], yang merupakan perilaku API yg benar.
     semua_modul = Modul.objects.all().order_by('urutan') 
-    serializer = ModulListSerializer(semua_modul, many=True)
+    serializer = ModulListSerializer(semua_modul, many=True, context={'request': request})
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -113,7 +113,7 @@ def daftar_modul_view(request):
 @permission_classes([IsAuthenticated])
 def detail_modul_view(request, modul_id):
     modul = get_object_or_404(Modul, id=modul_id)
-    serializer = ModulDetailSerializer(modul, many=False)
+    serializer = ModulDetailSerializer(modul, many=False, context={'request': request})
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -122,7 +122,7 @@ def detail_modul_view(request, modul_id):
 @permission_classes([IsAuthenticated])
 def detail_materi_view(request, materi_id):
     materi = get_object_or_404(Materi, id=materi_id)
-    serializer = MateriSerializer(materi, many=False)
+    serializer = MateriSerializer(materi, many=False, context={'request': request})
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -162,11 +162,49 @@ def submit_skor_view(request):
             
             # 5. Update poin total pengguna
             profil.total_poin += skor
+            
+            # --- LOGIKA LEVEL UP ---
+            # Contoh sederhana: Level naik setiap 1000 XP
+            # Level 1: 0-999, Level 2: 1000-1999, dst.
+            level_sekarang = profil.level
+            level_baru = (profil.total_poin // 1000) + 1
+            
+            naik_level = False
+            if level_baru > level_sekarang:
+                profil.level = level_baru
+                naik_level = True
+            
             profil.save()
+            
+            # --- LOGIKA BADGES ---
+            # Cek apakah user sudah menyelesaikan modul terkait aktivitas ini?
+            # Syarat: Selesaikan materi terakhir di modul ini DAN lulus kuis ini.
+            # Kita asumsikan kuis ini adalah bagian dari materi terakhir atau syarat akhir.
+            
+            modul = aktivitas.materi.modul
+            lencana_baru = None
+            
+            # Cek apakah ada lencana untuk modul ini
+            try:
+                lencana = Lencana.objects.get(modul_terkait=modul)
+                # Cek apakah user sudah punya lencana ini
+                if not LencanaSiswa.objects.filter(profil_siswa=profil, lencana=lencana).exists():
+                    # Berikan lencana!
+                    LencanaSiswa.objects.create(profil_siswa=profil, lencana=lencana)
+                    lencana_baru = lencana.nama
+            except Lencana.DoesNotExist:
+                pass
             
             # 6. Kirim respons sukses
             return Response(
-                {"status": "sukses", "message": f"Skor {skor} XP ditambahkan!", "total_poin_baru": profil.total_poin},
+                {
+                    "status": "sukses", 
+                    "message": f"Skor {skor} XP ditambahkan!", 
+                    "total_poin_baru": profil.total_poin,
+                    "level_up": naik_level,
+                    "new_level": level_baru if naik_level else None,
+                    "new_badge": lencana_baru
+                },
                 status=status.HTTP_201_CREATED
             )
             
@@ -177,6 +215,54 @@ def submit_skor_view(request):
     
     # Jika data dari React tidak valid (misal, 'skor' bukan angka)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def recent_activity_view(request):
+    """
+    Mengambil aktivitas terbaru user:
+    - Materi yang diselesaikan (MateriSelesai)
+    - Kuis yang dikerjakan (HasilAktivitas)
+    - Lencana yang didapat (LencanaSiswa)
+    """
+    profil = request.user.profilsiswa
+    activities = []
+    
+    # 1. Materi Selesai
+    materi_selesai = MateriSelesai.objects.filter(profil_siswa=profil).select_related('materi')
+    for ms in materi_selesai:
+        activities.append({
+            'type': 'material',
+            'title': f"Completed material: {ms.materi.judul}",
+            'date': ms.tanggal_selesai,
+            'xp': 10 # Asumsi base XP baca materi
+        })
+        
+    # 2. Hasil Aktivitas (Kuis)
+    hasil_kuis = HasilAktivitas.objects.filter(profil_siswa=profil).select_related('aktivitas', 'aktivitas__materi')
+    for hk in hasil_kuis:
+        activities.append({
+            'type': 'quiz',
+            'title': f"Completed quiz: {hk.aktivitas.materi.judul}",
+            'date': hk.tanggal_pengerjaan,
+            'xp': hk.skor
+        })
+        
+    # 3. Lencana
+    lencana_siswa = LencanaSiswa.objects.filter(profil_siswa=profil).select_related('lencana')
+    for ls in lencana_siswa:
+        activities.append({
+            'type': 'badge',
+            'title': f"Earned badge: {ls.lencana.nama}",
+            'date': ls.tanggal_didapat,
+            'xp': 0
+        })
+        
+    # Sort by date descending
+    activities.sort(key=lambda x: x['date'], reverse=True)
+    
+    # Ambil 5 teratas
+    return Response(activities[:5], status=status.HTTP_200_OK)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -197,7 +283,23 @@ def tandai_selesai_view(request):
         )
 
         if created:
-            return Response({"status": "sukses", "message": "Materi ditandai selesai"}, status=status.HTTP_201_CREATED)
+            # LOGIC BARU: Jika materi ini TIDAK punya aktivitas (cuma bacaan),
+            # beri poin otomatis (misal 10 XP) sebagai reward membaca.
+            # Kita cek apakah materi ini punya aktivitas?
+            has_activity = hasattr(materi, 'aktivitas') and materi.aktivitas is not None
+            
+            poin_added = 0
+            if not has_activity:
+                poin_reward = 10
+                profil.total_poin += poin_reward
+                profil.save()
+                poin_added = poin_reward
+
+            return Response({
+                "status": "sukses", 
+                "message": "Materi ditandai selesai",
+                "xp_gained": poin_added
+            }, status=status.HTTP_201_CREATED)
         else:
             return Response({"status": "sukses", "message": "Materi sudah pernah ditandai selesai"}, status=status.HTTP_200_OK)
 

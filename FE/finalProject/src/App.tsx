@@ -11,13 +11,14 @@ import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import Materials from "./pages/Materials";
+import Modules from "./pages/Modules";
 import Quiz from "./pages/Quiz";
 import Leaderboard from "./pages/Leaderboard";
 import GameLayout from "./components/GameLayout";
 import NotFound from "./pages/NotFound";
 import ApiTest from "./pages/ApiTest";
 
-const queryClient = new QueryClient(); 
+const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -34,7 +35,10 @@ const App = () => (
             <Route path="/" element={<GameLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/materials" element={<Materials />} />
+              <Route path="/modules" element={<Modules />} />
+              <Route path="/modules/:id" element={<Materials />} />
+              {/* Redirect old route to new modules page */}
+              <Route path="/materials" element={<Modules />} />
               <Route path="/quiz" element={<Quiz />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/api-test" element={<ApiTest />} />
