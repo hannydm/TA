@@ -52,7 +52,118 @@ interface Material {
   activityType?: string;
   activityInstruction?: string;
   activityValidation?: string;
+  puzzleBlocks?: string; // Comma separated blocks
+  puzzleAnswer?: string;
 }
+
+const PuzzleActivity = ({ material, onComplete }: { material: Material; onComplete: () => void }) => {
+  const [availableBlocks, setAvailableBlocks] = useState<string[]>([]);
+  const [userSequence, setUserSequence] = useState<string[]>([]);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    if (material.puzzleBlocks) {
+      // Split and shuffle slightly or just use as is (assuming backend sends them shuffled or we shuffle)
+      const blocks = material.puzzleBlocks.split(',').map(b => b.trim()).filter(b => b);
+      setAvailableBlocks(blocks);
+      setUserSequence([]);
+      setMessage(null);
+    }
+  }, [material.puzzleBlocks]);
+
+  const handleAddToSequence = (block: string, index: number) => {
+    const newAvailable = [...availableBlocks];
+    newAvailable.splice(index, 1);
+    setAvailableBlocks(newAvailable);
+    setUserSequence([...userSequence, block]);
+    setMessage(null);
+  };
+
+  const handleRemoveFromSequence = (block: string, index: number) => {
+    const newSequence = [...userSequence];
+    newSequence.splice(index, 1);
+    setUserSequence(newSequence);
+    setAvailableBlocks([...availableBlocks, block]);
+    setMessage(null);
+  };
+
+  const checkAnswer = () => {
+    const userAnswer = userSequence.join('');
+    // Remove spaces for looser comparison if needed, or strict
+    // The backend model says: "Tulis kode jawaban yang benar dalam satu baris, tanpa spasi."
+    // So we should probably strip spaces from both for comparison or follow strict rules.
+    // Let's try strict first, then loose.
+
+    const correct = material.puzzleAnswer?.replace(/\s+/g, '') === userAnswer.replace(/\s+/g, '');
+
+    if (correct) {
+      setMessage({ text: 'Correct! Great job.', type: 'success' });
+      onComplete();
+    } else {
+      setMessage({ text: 'Incorrect sequence. Try again.', type: 'error' });
+    }
+  };
+
+  return (
+    <div className="mb-8 p-6 rounded-xl border border-border bg-surface/30">
+      <h3 className="text-xl font-bold text-foreground mb-4 flex items-center">
+        <Code className="w-5 h-5 text-neon-magenta mr-2" />
+        Puzzle Code Challenge
+      </h3>
+      <p className="text-muted-foreground mb-6">{material.activityInstruction || "Arrange the blocks to form the correct code."}</p>
+
+      {/* Drop Zone */}
+      <div className="mb-6">
+        <label className="text-sm font-medium text-foreground mb-2 block">Your Solution:</label>
+        <div className="min-h-[60px] p-4 rounded-lg bg-black/50 border-2 border-dashed border-border flex flex-wrap gap-2 items-center">
+          {userSequence.length === 0 && <span className="text-muted-foreground text-sm italic">Click blocks below to add them here...</span>}
+          {userSequence.map((block, idx) => (
+            <button
+              key={`${block}-${idx}`}
+              onClick={() => handleRemoveFromSequence(block, idx)}
+              className="px-3 py-1.5 rounded bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50 hover:bg-destructive/20 hover:text-destructive hover:border-destructive transition-colors text-sm font-mono"
+            >
+              {block}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Available Blocks */}
+      <div className="mb-6">
+        <label className="text-sm font-medium text-foreground mb-2 block">Available Blocks:</label>
+        <div className="flex flex-wrap gap-2">
+          {availableBlocks.map((block, idx) => (
+            <button
+              key={`${block}-${idx}`}
+              onClick={() => handleAddToSequence(block, idx)}
+              className="px-3 py-1.5 rounded bg-surface border border-border hover:border-neon-magenta hover:text-neon-magenta transition-colors text-sm font-mono"
+            >
+              {block}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          {message && (
+            <span className={`text-sm font-bold ${message.type === 'success' ? 'text-success' : 'text-destructive'}`}>
+              {message.text}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={checkAnswer}
+          className="btn-neon px-6 py-2"
+          disabled={userSequence.length === 0}
+        >
+          Check Answer
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const Materials = () => {
   const { id } = useParams();
@@ -91,6 +202,8 @@ const Materials = () => {
         activityType: m.aktivitas?.tipe_aktivitas,
         activityInstruction: m.aktivitas?.instruksi,
         activityValidation: m.aktivitas?.validasi_html,
+        puzzleBlocks: m.aktivitas?.blok_kode_acak,
+        puzzleAnswer: m.aktivitas?.kode_jawaban,
       };
     });
 
@@ -133,7 +246,7 @@ const Materials = () => {
     return () => {
       cancelled = true;
     };
-  }, [id, authFetch]);
+  }, [id]);
 
   // Reset code when material changes
   useEffect(() => {
@@ -141,7 +254,7 @@ const Materials = () => {
     setCodeOutput('');
   }, [selectedMaterial]);
 
-  const handleMarkComplete = async (materialId: string) => {
+  const handleMarkComplete = async (materialId: string, stayOnPage: boolean = false) => {
     const material = materials.find((m) => m.id === materialId);
     if (!material || material.status === 'completed') return;
 
@@ -176,7 +289,10 @@ const Materials = () => {
       const xpGained = response.xp_gained || material.xpReward;
       setShowXPToast(xpGained);
 
-      setSelectedMaterial(null);
+      if (!stayOnPage) {
+        setSelectedMaterial(null);
+      }
+
       if (refreshProfile) {
         await refreshProfile();
       }
@@ -220,7 +336,7 @@ const Materials = () => {
               <ArrowLeft className="w-4 h-4 mr-2" /> Back to List
             </button>
 
-            {material.status !== 'completed' && material.activityType !== 'DEMO_HTML' && (
+            {material.status !== 'completed' && material.activityType !== 'DEMO_HTML' && material.activityType !== 'PUZZLE_CODE' && (
               <button
                 onClick={() => handleMarkComplete(material.id)}
                 className="btn-neon px-6 py-2 flex items-center space-x-2"
@@ -299,7 +415,7 @@ const Materials = () => {
 
                           // Mark as complete if successful
                           if (material.status !== 'completed') {
-                            handleMarkComplete(material.id);
+                            handleMarkComplete(material.id, true);
                           }
                         }
                         setCodeOutput(output);
@@ -319,6 +435,14 @@ const Materials = () => {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Puzzle Code Activity */}
+            {material.activityType === 'PUZZLE_CODE' && (
+              <PuzzleActivity
+                material={material}
+                onComplete={() => handleMarkComplete(material.id, true)}
+              />
             )}
 
             {/* Bottom Action for Non-Activity Materials */}
@@ -354,101 +478,105 @@ const Materials = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        {/* Sidebar */}
+        <div className="lg:col-span-1">
+          <div className="mission-card p-6 sticky top-24">
+            <h2 className="text-xl font-bold text-foreground mb-4 flex items-center">
+              <BookOpen className="w-5 h-5 text-neon-cyan mr-2" />
+              Modules
+            </h2>
+            <div className="space-y-2">
+              {modules.map((mod) => (
+                <div
+                  key={mod.id}
+                  onClick={() => {
+                    navigate(`/modules/${mod.id}`);
+                  }}
+                  className={`p-3 rounded-lg cursor-pointer transition-colors ${String(mod.id) === id
+                    ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50'
+                    : 'hover:bg-surface/50 text-muted-foreground hover:text-foreground'
+                    }`}
+                >
+                  <div className="font-medium text-sm">
+                    {mod.urutan}. {mod.judul}
+                  </div>
+                </div>
+              ))}
+            </div>
 
-          {/* Sidebar: Module List */}
-          <div className="lg:col-span-1">
-            <div className="mission-card p-4 sticky top-4">
-              <h3 className="text-lg font-bold text-foreground mb-4 flex items-center">
-                <Menu className="w-5 h-5 mr-2 text-neon-cyan" />
-                Modules
-              </h3>
-              <div className="space-y-2">
-                {modules.map((modul) => (
-                  <button
-                    key={modul.id}
-                    onClick={() => navigate(`/modules/${modul.id}`)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${String(modul.id) === id
-                      ? 'bg-neon-cyan/20 text-neon-cyan font-medium border border-neon-cyan/50'
-                      : 'text-muted-foreground hover:bg-surface hover:text-foreground'
-                      }`}
-                  >
-                    {modul.urutan}. {modul.judul}
-                  </button>
-                ))}
-              </div>
+            <div className="mt-6 pt-6 border-t border-border">
               <button
                 onClick={() => navigate('/modules')}
-                className="w-full mt-4 text-xs text-center text-muted-foreground hover:text-neon-cyan underline"
+                className="w-full btn-outline py-2 text-sm"
               >
                 View All Modules
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Main Content: Materials List */}
-          <div className="lg:col-span-3">
-            {/* Header */}
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-neon-cyan to-neon-magenta bg-clip-text text-transparent mb-2">
-                {moduleTitle}
-              </h1>
-              <p className="text-muted-foreground">
-                Complete the materials below to master this module.
-              </p>
-            </div>
+        {/* Main Content: Materials List */}
+        <div className="lg:col-span-3">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-neon-cyan to-neon-magenta bg-clip-text text-transparent mb-2">
+              {moduleTitle}
+            </h1>
+            <p className="text-muted-foreground">
+              Complete the materials below to master this module.
+            </p>
+          </div>
 
-            <div className="space-y-4">
-              {materials.map((material) => (
-                <div
-                  key={material.id}
-                  onClick={() => {
-                    if (material.status !== 'locked') {
-                      setSelectedMaterial(material.id);
-                    }
-                  }}
-                  className={`mission-card p-6 transition-all duration-300 ${material.status !== 'locked'
-                    ? 'cursor-pointer hover:border-neon-cyan/50 hover:-translate-y-1'
-                    : 'opacity-75 cursor-not-allowed bg-surface/30'
-                    }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-4">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${material.status === 'completed' ? 'bg-mission-completed/20' :
-                        material.status === 'active' ? 'bg-mission-active/20' :
-                          'bg-mission-locked/20'
-                        }`}>
-                        {getStatusIcon(material.status)}
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-foreground mb-1">
-                          {material.title}
-                        </h3>
-                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                          <div className="flex items-center space-x-1">
-                            <Clock className="w-4 h-4" />
-                            <span>{material.duration}</span>
-                          </div>
-                          {material.xpReward > 0 && (
-                            <div className="flex items-center space-x-1">
-                              <Zap className="w-4 h-4 text-neon-cyan" />
-                              <span className="text-neon-cyan">
-                                +{material.xpReward} XP
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+          <div className="space-y-4">
+            {materials.map((material) => (
+              <div
+                key={material.id}
+                onClick={() => {
+                  if (material.status !== 'locked') {
+                    setSelectedMaterial(material.id);
+                  }
+                }}
+                className={`mission-card p-6 transition-all duration-300 ${material.status !== 'locked'
+                  ? 'cursor-pointer hover:border-neon-cyan/50 hover:-translate-y-1'
+                  : 'opacity-75 cursor-not-allowed bg-surface/30'
+                  }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start space-x-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${material.status === 'completed' ? 'bg-mission-completed/20' :
+                      material.status === 'active' ? 'bg-mission-active/20' :
+                        'bg-mission-locked/20'
+                      }`}>
+                      {getStatusIcon(material.status)}
                     </div>
-
-                    <div className="text-muted-foreground">
-                      <Play className="w-5 h-5" />
+                    <div>
+                      <h3 className="text-lg font-bold text-foreground mb-1">
+                        {material.title}
+                      </h3>
+                      <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                        <div className="flex items-center space-x-1">
+                          <Clock className="w-4 h-4" />
+                          <span>{material.duration}</span>
+                        </div>
+                        {material.xpReward > 0 && (
+                          <div className="flex items-center space-x-1">
+                            <Zap className="w-4 h-4 text-neon-cyan" />
+                            <span className="text-neon-cyan">
+                              +{material.xpReward} XP
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
+
+                  <div className="text-muted-foreground">
+                    <Play className="w-5 h-5" />
+                  </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

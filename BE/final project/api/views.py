@@ -164,10 +164,11 @@ def submit_skor_view(request):
             profil.total_poin += skor
             
             # --- LOGIKA LEVEL UP ---
-            # Contoh sederhana: Level naik setiap 1000 XP
-            # Level 1: 0-999, Level 2: 1000-1999, dst.
+            # Progressive Leveling: Level N requires N * 100 XP to pass.
+            # Formula: Level = floor(0.5 + sqrt(0.25 + XP / 50))
+            import math
             level_sekarang = profil.level
-            level_baru = (profil.total_poin // 1000) + 1
+            level_baru = int(0.5 + math.sqrt(0.25 + (profil.total_poin / 50)))
             
             naik_level = False
             if level_baru > level_sekarang:

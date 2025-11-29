@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User as UserIcon, Trophy, Zap, Star, Calendar, Award } from 'lucide-react';
+import { User as UserIcon, Trophy, Zap, Star, Calendar, Award, Camera } from 'lucide-react';
 import { gameState, User, missions } from '@/lib/gameState';
 import { useAuth } from '@/hooks/useAuth';
 import { buildApiUrl } from '@/lib/api';
@@ -22,9 +22,7 @@ const Profile = () => {
 
   const completedMissions = missions.filter(m => m.status === 'completed');
   const totalXpEarned = completedMissions.reduce((sum, m) => sum + m.xpReward, 0);
-  const xpPercentage = (user.maxXp > 0 ? (user.xp / user.maxXp) : 0) * 100;
-  const totalMissions = 10; // Or fetch from backend if available
-  const completionRate = Math.round((badges.filter(b => b.earned).length / badges.length) * 100) || 0;
+  const completionRate = Math.round((badges.filter(b => b.earned).length / (badges.length || 1)) * 100) || 0;
 
   // Calculate streak (simplified: count distinct days in recent activity)
   const uniqueDays = new Set(recentActivity.map(a => a.time));
@@ -90,8 +88,6 @@ const Profile = () => {
     }
   };
 
-
-
   useEffect(() => {
     const loadProfileData = async () => {
       try {
@@ -137,6 +133,15 @@ const Profile = () => {
     loadProfileData();
   }, [authFetch]);
 
+  // Progressive Leveling Logic
+  const totalXP = profile?.total_poin || user.xp;
+  const currentLevel = Math.floor(0.5 + Math.sqrt(0.25 + (totalXP / 50)));
+  const xpForCurrentLevel = 50 * (currentLevel - 1) * currentLevel;
+  const xpForNextLevel = 50 * currentLevel * (currentLevel + 1);
+  const levelProgress = totalXP - xpForCurrentLevel;
+  const levelRange = xpForNextLevel - xpForCurrentLevel;
+  const percentage = Math.min(100, Math.max(0, (levelProgress / levelRange) * 100));
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto space-y-8">
@@ -163,9 +168,26 @@ const Profile = () => {
             </div>
 
             {/* User Info */}
-            <div className="flex-1 text-center md:text-left">
+            <div className="flex-1 text-center md:text-left w-full">
               <h1 className="text-3xl font-bold text-foreground mb-2">{user.name}</h1>
               <p className="text-xl text-neon-cyan font-medium mb-4">@{user.username}</p>
+
+              {/* Level Progress Bar (New) */}
+              <div className="mb-6 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Progress to Level {currentLevel + 1}</span>
+                  <span className="text-neon-cyan font-medium">{levelProgress}/{levelRange} XP</span>
+                </div>
+                <div className="xp-bar h-3">
+                  <div
+                    className="xp-fill"
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground text-right">
+                  {levelRange - levelProgress} XP needed for next level
+                </p>
+              </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="text-center">
@@ -181,51 +203,28 @@ const Profile = () => {
                   <div className="text-sm text-muted-foreground">Missions</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-warning">{badges.filter(b => b.earned).length}</div>
-                  <div className="text-sm text-muted-foreground">Badges</div>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarSelect}
+                      className="text-sm text-muted-foreground w-full"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAvatarUpload}
+                      disabled={!avatarFile || isUploading}
+                      className="btn-neon px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      {isUploading ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                  {uploadError && (
+                    <p className="text-xs text-destructive mt-1">
+                      {uploadError}
+                    </p>
+                  )}
                 </div>
-              </div>
-
-              {/* XP Progress */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Progress to Level {user.level + 1}</span>
-                  <span className="text-neon-cyan font-medium">{user.xp}/{user.maxXp} XP</span>
-                </div>
-                <div className="xp-bar">
-                  <div
-                    className="xp-fill"
-                    style={{ width: `${xpPercentage}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Avatar Upload */}
-              <div className="mt-6 space-y-2">
-                <label className="text-sm font-medium text-foreground">
-                  Ubah Foto Profil
-                </label>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarSelect}
-                    className="text-sm text-muted-foreground"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAvatarUpload}
-                    disabled={!avatarFile || isUploading}
-                    className="btn-neon px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {isUploading ? 'Menyimpan...' : 'Simpan Foto'}
-                  </button>
-                </div>
-                {uploadError && (
-                  <p className="text-xs text-destructive mt-1">
-                    {uploadError}
-                  </p>
-                )}
               </div>
             </div>
           </div>
@@ -233,24 +232,24 @@ const Profile = () => {
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="mission-card p-6 text-center">
-            <Trophy className="w-8 h-8 text-neon-magenta mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">Achievements</h3>
-            <p className="text-3xl font-bold text-neon-magenta mb-1">{badges.filter(b => b.earned).length}/{badges.length}</p>
+          <div className="mission-card p-6 text-center hover:border-neon-magenta transition-colors">
+            <Trophy className="w-10 h-10 text-neon-magenta mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-foreground mb-2">Achievements</h3>
+            <p className="text-4xl font-bold text-neon-magenta mb-1">{badges.filter(b => b.earned).length}/{badges.length}</p>
             <p className="text-sm text-muted-foreground">Badges Earned</p>
           </div>
 
-          <div className="mission-card p-6 text-center">
-            <Star className="w-8 h-8 text-neon-cyan mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">Excellence</h3>
-            <p className="text-3xl font-bold text-neon-cyan mb-1">{completionRate}%</p>
+          <div className="mission-card p-6 text-center hover:border-neon-cyan transition-colors">
+            <Star className="w-10 h-10 text-neon-cyan mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-foreground mb-2">Excellence</h3>
+            <p className="text-4xl font-bold text-neon-cyan mb-1">{completionRate}%</p>
             <p className="text-sm text-muted-foreground">Completion Rate</p>
           </div>
 
-          <div className="mission-card p-6 text-center">
-            <Calendar className="w-8 h-8 text-success mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">Consistency</h3>
-            <p className="text-3xl font-bold text-success mb-1">{streakDays}</p>
+          <div className="mission-card p-6 text-center hover:border-success transition-colors">
+            <Calendar className="w-10 h-10 text-success mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-foreground mb-2">Consistency</h3>
+            <p className="text-4xl font-bold text-success mb-1">{streakDays}</p>
             <p className="text-sm text-muted-foreground">Day Streak</p>
           </div>
         </div>
@@ -263,8 +262,10 @@ const Profile = () => {
           </div>
 
           {badges.filter(b => b.earned).length === 0 ? (
-            <div className="p-6 border border-dashed border-border rounded-xl text-center text-muted-foreground">
-              No badges earned yet. Complete missions and quizzes to grow your collection.
+            <div className="p-8 border-2 border-dashed border-border rounded-xl text-center text-muted-foreground">
+              <Trophy className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium mb-2">No badges earned yet</p>
+              <p>Complete missions and quizzes to grow your collection!</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -273,23 +274,21 @@ const Profile = () => {
                 .map((badge) => (
                   <div
                     key={badge.id}
-                    className="p-4 rounded-xl border bg-gradient-to-br from-neon-cyan/10 to-neon-magenta/10 border-neon-cyan/50 glow-cyan"
+                    className="p-4 rounded-xl border bg-gradient-to-br from-neon-cyan/10 to-neon-magenta/10 border-neon-cyan/50 glow-cyan flex items-start space-x-4"
                   >
-                    <div className="text-center">
-                      <div className="text-4xl mb-3">
-                        {badge.icon}
-                      </div>
-                      <h3 className="font-semibold mb-2 text-foreground">
+                    <div className="text-3xl">
+                      {badge.icon}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-foreground mb-1">
                         {badge.name}
                       </h3>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs text-muted-foreground mb-2">
                         {badge.description}
                       </p>
-                      <div className="mt-3">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/20 text-success">
-                          Earned
-                        </span>
-                      </div>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-success/20 text-success uppercase tracking-wide">
+                        Earned
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -306,31 +305,33 @@ const Profile = () => {
 
           <div className="space-y-4">
             {recentActivity.length === 0 ? (
-              <div className="p-6 border border-dashed border-border rounded-xl text-center text-muted-foreground">
-                No recent activity. Start your first mission to see your journey here.
+              <div className="p-8 border-2 border-dashed border-border rounded-xl text-center text-muted-foreground">
+                <Zap className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium mb-2">No recent activity</p>
+                <p>Start your first mission to see your journey here!</p>
               </div>
             ) : (
               recentActivity.map((activity, index) => (
-                <div key={index} className="flex items-center space-x-4 p-4 rounded-lg bg-surface/30 border border-border/50">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activity.type === 'mission' ? 'bg-mission-completed/20 text-mission-completed' :
+                <div key={index} className="flex items-center space-x-4 p-4 rounded-xl bg-surface/30 border border-border/50 hover:bg-surface/50 transition-colors">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${activity.type === 'mission' ? 'bg-mission-completed/20 text-mission-completed' :
                     activity.type === 'badge' ? 'bg-warning/20 text-warning' :
                       activity.type === 'quiz' ? 'bg-neon-cyan/20 text-neon-cyan' :
                         'bg-neon-magenta/20 text-neon-magenta'
                     }`}>
-                    {activity.type === 'mission' ? <Star className="w-5 h-5" /> :
-                      activity.type === 'badge' ? <Award className="w-5 h-5" /> :
-                        activity.type === 'quiz' ? <UserIcon className="w-5 h-5" /> :
-                          <Trophy className="w-5 h-5" />}
+                    {activity.type === 'mission' ? <Star className="w-6 h-6" /> :
+                      activity.type === 'badge' ? <Award className="w-6 h-6" /> :
+                        activity.type === 'quiz' ? <UserIcon className="w-6 h-6" /> :
+                          <Trophy className="w-6 h-6" />}
                   </div>
 
                   <div className="flex-1">
-                    <p className="text-foreground font-medium">{activity.action}</p>
+                    <p className="text-foreground font-bold text-lg">{activity.action}</p>
                     <p className="text-sm text-muted-foreground">{activity.time}</p>
                   </div>
 
                   {activity.xp > 0 && (
-                    <div className="flex items-center space-x-1 text-neon-cyan font-medium">
-                      <Zap className="w-4 h-4" />
+                    <div className="flex items-center space-x-1 text-neon-cyan font-bold text-lg">
+                      <Zap className="w-5 h-5" />
                       <span>+{activity.xp}</span>
                     </div>
                   )}

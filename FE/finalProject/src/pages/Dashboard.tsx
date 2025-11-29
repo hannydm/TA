@@ -67,6 +67,15 @@ const Dashboard = () => {
 
   const xpPercentage = (user.xp / user.maxXp) * 100;
 
+  // Level Calculation Logic
+  const totalXP = profile?.total_poin || user.xp;
+  const currentLevel = Math.floor(0.5 + Math.sqrt(0.25 + (totalXP / 50)));
+  const xpForCurrentLevel = 50 * (currentLevel - 1) * currentLevel;
+  const xpForNextLevel = 50 * currentLevel * (currentLevel + 1);
+  const levelProgress = totalXP - xpForCurrentLevel;
+  const levelRange = xpForNextLevel - xpForCurrentLevel;
+  const percentage = Math.min(100, Math.max(0, (levelProgress / levelRange) * 100));
+
   const displayName = user.name || profile?.user?.username || user.username;
   const avatarInitial = (
     displayName?.charAt(0) ||
@@ -117,13 +126,13 @@ const Dashboard = () => {
             {/* XP Progress */}
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Experience</span>
-                <span className="text-neon-cyan font-medium">{profile?.total_poin || user.xp} XP</span>
+                <span className="text-muted-foreground">Level Progress</span>
+                <span className="text-neon-cyan font-medium">{levelProgress}/{levelRange} XP</span>
               </div>
               <div className="xp-bar">
                 <div
                   className="xp-fill"
-                  style={{ width: `${xpPercentage}%` }}
+                  style={{ width: `${percentage}%` }}
                 />
               </div>
             </div>
