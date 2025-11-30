@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Brain, Clock, CheckCircle, X, Zap, Trophy, ArrowRight } from 'lucide-react';
 import { quizQuestions } from '@/lib/gameState';
 import XPToast from '@/components/XPToast';
 import NotificationToast from '@/components/NotificationToast';
 import { useAuth } from '@/hooks/useAuth';
-import { useSearchParams } from 'react-router-dom';
 
 interface QuizState {
   currentQuestion: number;
@@ -48,8 +47,6 @@ const Quiz = () => {
   const [badgeToast, setBadgeToast] = useState<string | null>(null);
   const [apiQuizzes, setApiQuizzes] = useState<ApiAktivitasQuiz[]>([]);
   const { authFetch, refreshProfile } = useAuth();
-  const [searchParams] = useSearchParams();
-  const initialisedFromParam = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,18 +68,20 @@ const Quiz = () => {
     };
   }, [authFetch]);
 
-  // Auto-start quiz when coming from material via ?aktivitas=
+  // Auto-start quiz when coming from materials via localStorage flag
   useEffect(() => {
-    if (initialisedFromParam.current || !apiQuizzes.length) return;
-    const aktivitasId = searchParams.get('aktivitas');
-    if (!aktivitasId) return;
+    if (!apiQuizzes.length || selectedQuiz) return;
+    if (typeof window === 'undefined') return;
 
-    const exists = apiQuizzes.some((q) => String(q.id) === aktivitasId);
+    const next = window.localStorage.getItem(NEXT_QUIZ_KEY);
+    if (!next) return;
+
+    const exists = apiQuizzes.some((q) => String(q.id) === next);
+    window.localStorage.removeItem(NEXT_QUIZ_KEY);
     if (exists) {
-      initialisedFromParam.current = true;
-      handleStartQuiz(aktivitasId);
+      handleStartQuiz(next);
     }
-  }, [apiQuizzes, searchParams, handleStartQuiz]);
+  }, [apiQuizzes, selectedQuiz]);
 
   const quizList = apiQuizzes.length
     ? apiQuizzes.map((q, index) => ({
@@ -154,6 +153,7 @@ const Quiz = () => {
   }, [selectedQuiz, quizState.showResults]);
 
   const QUIZ_HISTORY_PREFIX = 'digi_world_quiz_history_';
+  const NEXT_QUIZ_KEY = 'digi_world_next_quiz';
 
   const loadQuizHistory = (quizId: string) => {
     if (typeof window === 'undefined') return null;

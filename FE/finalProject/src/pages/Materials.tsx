@@ -395,11 +395,13 @@ const Materials = () => {
                 </p>
                 <button
                   onClick={() => {
-                    if (material.aktivitasId) {
-                      navigate(`/quiz?aktivitas=${material.aktivitasId}`);
-                    } else {
-                      navigate('/quiz');
+                    if (typeof window !== 'undefined' && material.aktivitasId) {
+                      window.localStorage.setItem(
+                        'digi_world_next_quiz',
+                        String(material.aktivitasId)
+                      );
                     }
+                    navigate('/quiz');
                   }}
                   disabled={material.status !== 'completed'}
                   className="btn-neon px-6 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
