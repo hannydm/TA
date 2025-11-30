@@ -8,6 +8,27 @@ interface XPToastProps {
 
 const XPToast = ({ amount, onComplete }: XPToastProps) => {
   useEffect(() => {
+    // Simple XP sound (short, soft "ping")
+    try {
+      if (typeof window !== 'undefined' && 'AudioContext' in window) {
+        const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = 880; // A5
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        const now = ctx.currentTime;
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      }
+    } catch {
+      // ignore audio errors
+    }
+
     const timer = setTimeout(onComplete, 3000);
     return () => clearTimeout(timer);
   }, [onComplete]);

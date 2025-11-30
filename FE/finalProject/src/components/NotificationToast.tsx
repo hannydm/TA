@@ -10,6 +10,32 @@ interface NotificationToastProps {
 
 const NotificationToast = ({ type, title, message, onClose }: NotificationToastProps) => {
     useEffect(() => {
+        // Play different sounds for level up vs badge
+        try {
+            if (typeof window !== 'undefined' && 'AudioContext' in window) {
+                const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+                const ctx = new AudioCtx();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = type === 'levelup' ? 'sawtooth' : 'square';
+                const baseFreq = type === 'levelup' ? 660 : 520;
+                osc.frequency.value = baseFreq;
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                const now = ctx.currentTime;
+                gain.gain.setValueAtTime(0.25, now);
+                // small upward sweep
+                osc.frequency.linearRampToValueAtTime(baseFreq + 200, now + 0.25);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+                osc.start(now);
+                osc.stop(now + 0.4);
+            }
+        } catch {
+            // ignore audio errors
+        }
+
         const timer = setTimeout(onClose, 5000); // Auto close after 5 seconds
         return () => clearTimeout(timer);
     }, [onClose]);
