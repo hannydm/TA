@@ -45,9 +45,29 @@ const Profile = () => {
   const totalBadgesCount = badges.length || progress?.badges_earned || 0;
   const achievementsTotal = totalBadgesCount || earnedBadgesCount || 1;
 
-  // Calculate streak (simplified: count distinct days in recent activity)
-  const uniqueDays = new Set(recentActivity.map(a => a.time));
-  const streakDays = uniqueDays.size;
+  // Calculate streak based on consecutive active days
+  const dayKeys = Array.from(
+    new Set(
+      recentActivity
+        .map((a) => a.timeKey as string | undefined)
+        .filter(Boolean) as string[]
+    )
+  ).sort(); // ascending 'YYYY-MM-DD'
+
+  let streakDays = 0;
+  if (dayKeys.length > 0) {
+    // Mulai dari hari aktivitas terakhir
+    let streak = 1;
+    let cursor = new Date(`${dayKeys[dayKeys.length - 1]}T00:00:00Z`);
+
+    while (true) {
+      cursor.setDate(cursor.getDate() - 1);
+      const prevKey = cursor.toISOString().slice(0, 10);
+      if (!dayKeys.includes(prevKey)) break;
+      streak += 1;
+    }
+    streakDays = streak;
+  }
 
   const displayName = user.name || profile?.user?.username || user.username;
   const avatarInitial = (
@@ -137,12 +157,17 @@ const Profile = () => {
 
         // Process Activity
         if (Array.isArray(activityData)) {
-          const mappedActivity = activityData.map(act => ({
-            action: act.title,
-            xp: act.xp,
-            time: new Date(act.date).toLocaleDateString(),
-            type: act.type
-          }));
+          const mappedActivity = activityData.map(act => {
+            const d = new Date(act.date);
+            const timeKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            return {
+              action: act.title,
+              xp: act.xp,
+              time: d.toLocaleDateString(),
+              timeKey,
+              type: act.type,
+            };
+          });
           setRecentActivity(mappedActivity);
         }
 

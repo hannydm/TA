@@ -394,7 +394,13 @@ const Materials = () => {
                   Setelah membaca materi terakhir, lanjutkan dengan mengerjakan quiz modul untuk mendapatkan XP dan berpeluang meraih badge.
                 </p>
                 <button
-                  onClick={() => navigate('/quiz')}
+                  onClick={() => {
+                    if (material.aktivitasId) {
+                      navigate(`/quiz?aktivitas=${material.aktivitasId}`);
+                    } else {
+                      navigate('/quiz');
+                    }
+                  }}
                   disabled={material.status !== 'completed'}
                   className="btn-neon px-6 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
@@ -451,10 +457,8 @@ const Materials = () => {
                           }
                           output += "\n\n[Process completed with exit code 0]";
 
-                          // Mark as complete if successful
-                          if (material.status !== 'completed') {
-                            handleMarkComplete(material.id, true);
-                          }
+                          // Success: biarkan pengguna tetap di halaman,
+                          // mereka bisa menandai selesai secara manual.
                         }
                         setCodeOutput(output);
                       }}
@@ -479,16 +483,19 @@ const Materials = () => {
             {material.activityType === 'PUZZLE_CODE' && (
               <PuzzleActivity
                 material={material}
-                onComplete={() => handleMarkComplete(material.id, true)}
+                onComplete={() => {
+                  // Tampilkan status benar, tapi biarkan pengguna
+                  // menandai selesai sendiri agar tetap di halaman.
+                }}
               />
             )}
 
-            {/* Bottom Action for Non-Activity Materials */}
-            {material.status !== 'completed' && !material.activityType && (
+            {/* Bottom Action for marking completion (all non-quiz materials) */}
+            {material.status !== 'completed' && material.activityType !== 'PILIHAN_GANDA' && (
               <div className="mt-8 p-6 rounded-xl bg-gradient-to-r from-neon-cyan/10 to-neon-magenta/10 border border-neon-cyan/30">
                 <div className="text-center">
                   <h3 className="text-lg font-semibold text-foreground mb-2">
-                    Finished Reading?
+                    Selesai dengan materi dan aktivitas?
                   </h3>
                   <button
                     onClick={() => handleMarkComplete(material.id)}

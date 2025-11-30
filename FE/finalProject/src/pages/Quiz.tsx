@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Brain, Clock, CheckCircle, X, Zap, Trophy, ArrowRight } from 'lucide-react';
 import { quizQuestions } from '@/lib/gameState';
 import XPToast from '@/components/XPToast';
 import NotificationToast from '@/components/NotificationToast';
 import { useAuth } from '@/hooks/useAuth';
+import { useSearchParams } from 'react-router-dom';
 
 interface QuizState {
   currentQuestion: number;
@@ -47,6 +48,8 @@ const Quiz = () => {
   const [badgeToast, setBadgeToast] = useState<string | null>(null);
   const [apiQuizzes, setApiQuizzes] = useState<ApiAktivitasQuiz[]>([]);
   const { authFetch, refreshProfile } = useAuth();
+  const [searchParams] = useSearchParams();
+  const initialisedFromParam = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +70,19 @@ const Quiz = () => {
       cancelled = true;
     };
   }, [authFetch]);
+
+  // Auto-start quiz when coming from material via ?aktivitas=
+  useEffect(() => {
+    if (initialisedFromParam.current || !apiQuizzes.length) return;
+    const aktivitasId = searchParams.get('aktivitas');
+    if (!aktivitasId) return;
+
+    const exists = apiQuizzes.some((q) => String(q.id) === aktivitasId);
+    if (exists) {
+      initialisedFromParam.current = true;
+      handleStartQuiz(aktivitasId);
+    }
+  }, [apiQuizzes, searchParams, handleStartQuiz]);
 
   const quizList = apiQuizzes.length
     ? apiQuizzes.map((q, index) => ({
@@ -137,7 +153,29 @@ const Quiz = () => {
     return () => clearInterval(timer);
   }, [selectedQuiz, quizState.showResults]);
 
-  const handleStartQuiz = (quizId: string) => {
+  const QUIZ_HISTORY_PREFIX = 'digi_world_quiz_history_';
+
+  const loadQuizHistory = (quizId: string) => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = window.localStorage.getItem(`${QUIZ_HISTORY_PREFIX}${quizId}`);
+      if (!raw) return null;
+      return JSON.parse(raw) as { selectedAnswers: number[]; score: number };
+    } catch {
+      return null;
+    }
+  };
+
+  const saveQuizHistory = (quizId: string, data: { selectedAnswers: number[]; score: number }) => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(`${QUIZ_HISTORY_PREFIX}${quizId}`, JSON.stringify(data));
+    } catch {
+      // ignore quota errors
+    }
+  };
+
+  const handleStartQuiz = (quizId: string, forceNew: boolean = false) => {
     setSelectedQuiz(quizId);
 
     // Calculate time based on number of questions (1 minute per question)
@@ -151,12 +189,26 @@ const Quiz = () => {
 
     const calculatedTime = questionCount * 60; // 60 seconds per question
 
+    if (!forceNew) {
+      const history = loadQuizHistory(quizId);
+      if (history) {
+        setQuizState({
+          currentQuestion: 0,
+          selectedAnswers: history.selectedAnswers || [],
+          showResults: true,
+          score: history.score || 0,
+          timeLeft: calculatedTime > 0 ? calculatedTime : 300,
+        });
+        return;
+      }
+    }
+
     setQuizState({
       currentQuestion: 0,
       selectedAnswers: [],
       showResults: false,
       score: 0,
-      timeLeft: calculatedTime > 0 ? calculatedTime : 300 // Default to 5 mins if 0 questions (shouldn't happen)
+      timeLeft: calculatedTime > 0 ? calculatedTime : 300, // Default to 5 mins if 0 questions (shouldn't happen)
     });
   };
 
@@ -204,6 +256,13 @@ const Quiz = () => {
     const totalXPGained = finalScore + bonusXP;
 
     setQuizState(prev => ({ ...prev, score: correctCount, showResults: true }));
+
+    if (selectedQuiz) {
+      saveQuizHistory(selectedQuiz, {
+        selectedAnswers: quizState.selectedAnswers,
+        score: correctCount,
+      });
+    }
     setShowXPToast(totalXPGained);
 
     // Jika quiz berasal dari backend, simpan hasil ke backend.
@@ -368,7 +427,7 @@ const Quiz = () => {
                 Continue Exploring
               </button>
               <button
-                onClick={() => handleStartQuiz(selectedQuiz)}
+                onClick={() => selectedQuiz && handleStartQuiz(selectedQuiz, true)}
                 className="w-full px-4 py-2 rounded-lg border border-border text-muted-foreground hover:text-neon-cyan hover:border-neon-cyan transition-colors"
               >
                 Retake Quiz
