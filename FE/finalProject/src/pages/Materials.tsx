@@ -386,35 +386,7 @@ const Materials = () => {
               </div>
             </div>
 
-            {/* Last material CTA to quiz */}
-            {material.isLastInModule && (
-              <div className="mb-8 p-4 rounded-xl border border-neon-cyan/40 bg-neon-cyan/5">
-                <h3 className="text-lg font-bold text-foreground mb-1">Saatnya ke Quiz Modul</h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Setelah membaca materi terakhir, lanjutkan dengan mengerjakan quiz modul untuk mendapatkan XP dan berpeluang meraih badge.
-                </p>
-                <button
-                  onClick={() => {
-                    if (typeof window !== 'undefined' && material.aktivitasId) {
-                      window.localStorage.setItem(
-                        'digi_world_next_quiz',
-                        String(material.aktivitasId)
-                      );
-                    }
-                    navigate('/quiz');
-                  }}
-                  disabled={material.status !== 'completed'}
-                  className="btn-neon px-6 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  Pergi ke Halaman Quiz
-                </button>
-                {material.status !== 'completed' && (
-                  <p className="text-xs text-warning mt-2">
-                    Tandai materi ini selesai terlebih dahulu untuk membuka quiz.
-                  </p>
-                )}
-              </div>
-            )}
+
 
             {/* Live Code Activity */}
             {material.activityType === 'DEMO_HTML' && (
@@ -490,6 +462,25 @@ const Materials = () => {
                   // menandai selesai sendiri agar tetap di halaman.
                 }}
               />
+            )}
+
+            {/* Quiz Activity (Pilihan Ganda) */}
+            {material.activityType === 'PILIHAN_GANDA' && (
+              <div className="mb-8 p-6 rounded-xl border border-border bg-surface/30">
+                <h3 className="text-xl font-bold text-foreground mb-4 flex items-center">
+                  <Zap className="w-5 h-5 text-neon-magenta mr-2" />
+                  Quiz Challenge
+                </h3>
+                <p className="text-muted-foreground mb-6">{material.activityInstruction || "Test your knowledge with this quiz!"}</p>
+
+                <button
+                  onClick={() => navigate(`/quiz?id=${material.aktivitasId}`)}
+                  className="btn-neon px-8 py-3 flex items-center space-x-2"
+                >
+                  <Play className="w-5 h-5" />
+                  <span>Start Quiz</span>
+                </button>
+              </div>
             )}
 
             {/* Bottom Action for marking completion (all non-quiz materials) */}

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Brain, Clock, CheckCircle, X, Zap, Trophy, ArrowRight } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Brain, Clock, CheckCircle, X, Zap, Trophy, ArrowRight, Volume2, VolumeX } from 'lucide-react';
 import { quizQuestions } from '@/lib/gameState';
 import XPToast from '@/components/XPToast';
 import NotificationToast from '@/components/NotificationToast';
@@ -34,6 +35,7 @@ interface ApiAktivitasQuiz {
 }
 
 const Quiz = () => {
+  const [searchParams] = useSearchParams();
   const [selectedQuiz, setSelectedQuiz] = useState<string | null>(null);
   const [quizState, setQuizState] = useState<QuizState>({
     currentQuestion: 0,
@@ -47,6 +49,33 @@ const Quiz = () => {
   const [badgeToast, setBadgeToast] = useState<string | null>(null);
   const [apiQuizzes, setApiQuizzes] = useState<ApiAktivitasQuiz[]>([]);
   const { authFetch, refreshProfile } = useAuth();
+  const [isMuted, setIsMuted] = useState(false);
+
+  // Audio State
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize background music
+  useEffect(() => {
+    bgmRef.current = new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3?filename=background-music-for-video-blog-low-fi-hip-hop-10675.mp3');
+    bgmRef.current.loop = true;
+    bgmRef.current.volume = 0.3;
+
+    return () => {
+      if (bgmRef.current) {
+        bgmRef.current.pause();
+        bgmRef.current = null;
+      }
+    };
+  }, []);
+
+  // Control background music based on quiz state
+  useEffect(() => {
+    if (selectedQuiz && !quizState.showResults && !isMuted && bgmRef.current) {
+      bgmRef.current.play().catch(e => console.log("Audio play failed (user interaction needed):", e));
+    } else if (bgmRef.current) {
+      bgmRef.current.pause();
+    }
+  }, [selectedQuiz, quizState.showResults, isMuted]);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,20 +97,16 @@ const Quiz = () => {
     };
   }, [authFetch]);
 
-  // Auto-start quiz when coming from materials via localStorage flag
+  // Auto-start quiz from URL parameter
   useEffect(() => {
-    if (!apiQuizzes.length || selectedQuiz) return;
-    if (typeof window === 'undefined') return;
-
-    const next = window.localStorage.getItem(NEXT_QUIZ_KEY);
-    if (!next) return;
-
-    const exists = apiQuizzes.some((q) => String(q.id) === next);
-    window.localStorage.removeItem(NEXT_QUIZ_KEY);
-    if (exists) {
-      handleStartQuiz(next);
+    const quizIdParam = searchParams.get('id');
+    if (quizIdParam && apiQuizzes.length > 0 && !selectedQuiz) {
+      const targetQuiz = apiQuizzes.find(q => String(q.id) === quizIdParam);
+      if (targetQuiz) {
+        handleStartQuiz(String(targetQuiz.id));
+      }
     }
-  }, [apiQuizzes, selectedQuiz]);
+  }, [searchParams, apiQuizzes, selectedQuiz]);
 
   const quizList = apiQuizzes.length
     ? apiQuizzes.map((q, index) => ({
@@ -480,9 +505,18 @@ const Quiz = () => {
               >
                 Back to Quizzes
               </button>
-              <div className="flex items-center space-x-2 text-muted-foreground">
-                <Clock className="w-4 h-4" />
-                <span>{Math.floor(quizState.timeLeft / 60)}:{(quizState.timeLeft % 60).toString().padStart(2, '0')}</span>
+              <div className="flex items-center space-x-4 text-muted-foreground">
+                <button
+                  onClick={() => setIsMuted(!isMuted)}
+                  className="hover:text-neon-cyan transition-colors"
+                  title={isMuted ? "Unmute Music" : "Mute Music"}
+                >
+                  {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                </button>
+                <div className="flex items-center space-x-2">
+                  <Clock className="w-4 h-4" />
+                  <span>{Math.floor(quizState.timeLeft / 60)}:{(quizState.timeLeft % 60).toString().padStart(2, '0')}</span>
+                </div>
               </div>
             </div>
 
