@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { BookOpen, Play, CheckCircle, Lock, Clock, Zap, ArrowLeft, Menu, Code } from 'lucide-react';
 import XPToast from '@/components/XPToast';
+import NotificationToast from '@/components/NotificationToast';
 import { useAuth } from '@/hooks/useAuth';
 
 type MaterialStatus = 'locked' | 'active' | 'completed';
@@ -54,6 +55,7 @@ interface Material {
   activityValidation?: string;
   puzzleBlocks?: string; // Comma separated blocks
   puzzleAnswer?: string;
+  isLastInModule?: boolean;
 }
 
 const PuzzleActivity = ({ material, onComplete }: { material: Material; onComplete: () => void }) => {
@@ -176,6 +178,8 @@ const Materials = () => {
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
   const [showXPToast, setShowXPToast] = useState<number | null>(null);
   const [moduleTitle, setModuleTitle] = useState('');
+  const [levelUpToast, setLevelUpToast] = useState<number | null>(null);
+  const [badgeToast, setBadgeToast] = useState<string | null>(null);
 
   // State for Live Code
   const [userCode, setUserCode] = useState('');
@@ -183,12 +187,15 @@ const Materials = () => {
 
   const mapModuleDetailToMaterials = (detail: ApiModulDetail) => {
     setModuleTitle(detail.judul);
+    const maxOrder =
+      detail.materi_set.reduce((max, m) => Math.max(max, m.urutan), 0) || 0;
 
     const mappedMaterials: Material[] = detail.materi_set.map((m) => {
       let status: MaterialStatus = 'locked';
       if (!m.is_locked) {
         status = 'active';
       }
+      const isLastInModule = maxOrder > 0 && m.urutan === maxOrder;
 
       return {
         id: String(m.id),
@@ -204,6 +211,7 @@ const Materials = () => {
         activityValidation: m.aktivitas?.validasi_html,
         puzzleBlocks: m.aktivitas?.blok_kode_acak,
         puzzleAnswer: m.aktivitas?.kode_jawaban,
+        isLastInModule,
       };
     });
 
@@ -259,15 +267,23 @@ const Materials = () => {
     if (!material || material.status === 'completed') return;
 
     try {
+      let submitResult: any = null;
       // If it has an activity, submit score
       if (material.aktivitasId && material.xpReward > 0) {
-        await authFetch('/api/submit-skor/', {
+        submitResult = await authFetch('/api/submit-skor/', {
           method: 'POST',
           body: JSON.stringify({
             aktivitas_id: material.aktivitasId,
             skor: material.xpReward,
           }),
         });
+
+        if (submitResult?.level_up && submitResult?.new_level) {
+          setLevelUpToast(submitResult.new_level);
+        }
+        if (submitResult?.new_badge) {
+          setBadgeToast(submitResult.new_badge);
+        }
       }
 
       // Always mark as done
@@ -286,7 +302,7 @@ const Materials = () => {
       );
 
       // Show toast with actual XP gained
-      const xpGained = response.xp_gained || material.xpReward;
+      const xpGained = response?.xp_gained ?? material.xpReward;
       setShowXPToast(xpGained);
 
       if (!stayOnPage) {
@@ -369,6 +385,28 @@ const Materials = () => {
                 {material.content}
               </div>
             </div>
+
+            {/* Last material CTA to quiz */}
+            {material.isLastInModule && (
+              <div className="mb-8 p-4 rounded-xl border border-neon-cyan/40 bg-neon-cyan/5">
+                <h3 className="text-lg font-bold text-foreground mb-1">Saatnya ke Quiz Modul</h3>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Setelah membaca materi terakhir, lanjutkan dengan mengerjakan quiz modul untuk mendapatkan XP dan berpeluang meraih badge.
+                </p>
+                <button
+                  onClick={() => navigate('/quiz')}
+                  disabled={material.status !== 'completed'}
+                  className="btn-neon px-6 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  Pergi ke Halaman Quiz
+                </button>
+                {material.status !== 'completed' && (
+                  <p className="text-xs text-warning mt-2">
+                    Tandai materi ini selesai terlebih dahulu untuk membuka quiz.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Live Code Activity */}
             {material.activityType === 'DEMO_HTML' && (
@@ -470,6 +508,22 @@ const Materials = () => {
           <XPToast
             amount={showXPToast}
             onComplete={() => setShowXPToast(null)}
+          />
+        )}
+        {levelUpToast && (
+          <NotificationToast
+            type="levelup"
+            title="Level Up!"
+            message={`Kamu naik ke level ${levelUpToast}. Lanjutkan petualangan!`}
+            onClose={() => setLevelUpToast(null)}
+          />
+        )}
+        {badgeToast && (
+          <NotificationToast
+            type="badge"
+            title="Badge Baru!"
+            message={`Selamat, kamu mendapatkan badge ${badgeToast}.`}
+            onClose={() => setBadgeToast(null)}
           />
         )}
       </div>
@@ -586,6 +640,22 @@ const Materials = () => {
         <XPToast
           amount={showXPToast}
           onComplete={() => setShowXPToast(null)}
+        />
+      )}
+      {levelUpToast && (
+        <NotificationToast
+          type="levelup"
+          title="Level Up!"
+          message={`Kamu naik ke level ${levelUpToast}. Lanjutkan petualangan!`}
+          onClose={() => setLevelUpToast(null)}
+        />
+      )}
+      {badgeToast && (
+        <NotificationToast
+          type="badge"
+          title="Badge Baru!"
+          message={`Selamat, kamu mendapatkan badge ${badgeToast}.`}
+          onClose={() => setBadgeToast(null)}
         />
       )}
     </div>

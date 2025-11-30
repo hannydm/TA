@@ -1,8 +1,17 @@
 import { useState, useEffect } from 'react';
 import { User as UserIcon, Trophy, Zap, Star, Calendar, Award, Camera } from 'lucide-react';
-import { gameState, User, missions } from '@/lib/gameState';
+import { gameState, User } from '@/lib/gameState';
 import { useAuth } from '@/hooks/useAuth';
 import { buildApiUrl } from '@/lib/api';
+
+interface ProgressSummary {
+  missions_completed: number;
+  total_missions: number;
+  quizzes_completed: number;
+  badges_earned: number;
+  level: number;
+  total_poin: number;
+}
 
 const Profile = () => {
   const [user, setUser] = useState<User>(gameState.getUser());
@@ -13,6 +22,7 @@ const Profile = () => {
 
   const [badges, setBadges] = useState<any[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [progress, setProgress] = useState<ProgressSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,9 +30,20 @@ const Profile = () => {
     return unsubscribe;
   }, []);
 
-  const completedMissions = missions.filter(m => m.status === 'completed');
-  const totalXpEarned = completedMissions.reduce((sum, m) => sum + m.xpReward, 0);
-  const completionRate = Math.round((badges.filter(b => b.earned).length / (badges.length || 1)) * 100) || 0;
+  useEffect(() => {
+    if (!profile) {
+      setProgress(null);
+    }
+  }, [profile]);
+
+  const completedMissionCount = progress?.missions_completed ?? 0;
+  const totalXpEarned = progress?.total_poin ?? profile?.total_poin ?? user.xp;
+  const completionRate = progress?.total_missions
+    ? Math.round((completedMissionCount / progress.total_missions) * 100)
+    : 0;
+  const earnedBadgesCount = progress?.badges_earned ?? badges.filter(b => b.earned).length;
+  const totalBadgesCount = badges.length || progress?.badges_earned || 0;
+  const achievementsTotal = totalBadgesCount || earnedBadgesCount || 1;
 
   // Calculate streak (simplified: count distinct days in recent activity)
   const uniqueDays = new Set(recentActivity.map(a => a.time));
@@ -91,14 +112,16 @@ const Profile = () => {
   useEffect(() => {
     const loadProfileData = async () => {
       try {
-        // 1. Fetch All Badges
-        const allBadges = await authFetch<any[]>('/api/lencana/');
+        const [allBadges, myBadges, activityData, progressData] = await Promise.all([
+          authFetch<any[]>('/api/lencana/'),
+          authFetch<any[]>('/api/lencana-saya/'),
+          authFetch<any[]>('/api/recent-activity/'),
+          authFetch<ProgressSummary>('/api/progress/summary/'),
+        ]);
 
-        // 2. Fetch My Badges
-        const myBadges = await authFetch<any[]>('/api/lencana-saya/');
-
-        // 3. Fetch Recent Activity
-        const activityData = await authFetch<any[]>('/api/recent-activity/');
+        if (progressData) {
+          setProgress(progressData);
+        }
 
         // Process Badges
         if (Array.isArray(allBadges) && Array.isArray(myBadges)) {
@@ -134,10 +157,12 @@ const Profile = () => {
   }, [authFetch]);
 
   // Progressive Leveling Logic
-  const totalXP = profile?.total_poin || user.xp;
-  const currentLevel = Math.floor(0.5 + Math.sqrt(0.25 + (totalXP / 50)));
-  const xpForCurrentLevel = 50 * (currentLevel - 1) * currentLevel;
-  const xpForNextLevel = 50 * currentLevel * (currentLevel + 1);
+  const totalXP = progress?.total_poin ?? profile?.total_poin ?? user.xp;
+  const derivedLevel = Math.floor(0.5 + Math.sqrt(0.25 + (totalXP / 50)));
+  const currentLevel = progress?.level ?? profile?.level ?? derivedLevel;
+  const levelForProgress = currentLevel || derivedLevel || 1;
+  const xpForCurrentLevel = 50 * (levelForProgress - 1) * levelForProgress;
+  const xpForNextLevel = 50 * levelForProgress * (levelForProgress + 1);
   const levelProgress = totalXP - xpForCurrentLevel;
   const levelRange = xpForNextLevel - xpForCurrentLevel;
   const percentage = Math.min(100, Math.max(0, (levelProgress / levelRange) * 100));
@@ -163,14 +188,14 @@ const Profile = () => {
                 )}
               </div>
               <div className="absolute -bottom-2 -right-2 w-12 h-12 rounded-full bg-gradient-to-br from-neon-cyan to-neon-magenta flex items-center justify-center text-sm font-bold text-background">
-                {user.level}
+                {currentLevel}
               </div>
             </div>
 
             {/* User Info */}
             <div className="flex-1 text-center md:text-left w-full">
-              <h1 className="text-3xl font-bold text-foreground mb-2">{user.name}</h1>
-              <p className="text-xl text-neon-cyan font-medium mb-4">@{user.username}</p>
+              <h1 className="text-3xl font-bold text-foreground mb-2">{displayName}</h1>
+              <p className="text-xl text-neon-cyan font-medium mb-4">@{profile?.user?.username || user.username}</p>
 
               {/* Level Progress Bar (New) */}
               <div className="mb-6 space-y-2">
@@ -191,7 +216,7 @@ const Profile = () => {
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-neon-cyan">{user.level}</div>
+                  <div className="text-2xl font-bold text-neon-cyan">{currentLevel}</div>
                   <div className="text-sm text-muted-foreground">Level</div>
                 </div>
                 <div className="text-center">
@@ -199,7 +224,7 @@ const Profile = () => {
                   <div className="text-sm text-muted-foreground">Total XP</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-mission-completed">{completedMissions.length}</div>
+                  <div className="text-2xl font-bold text-mission-completed">{completedMissionCount}</div>
                   <div className="text-sm text-muted-foreground">Missions</div>
                 </div>
                 <div className="text-center">
@@ -235,7 +260,7 @@ const Profile = () => {
           <div className="mission-card p-6 text-center hover:border-neon-magenta transition-colors">
             <Trophy className="w-10 h-10 text-neon-magenta mx-auto mb-4" />
             <h3 className="text-lg font-bold text-foreground mb-2">Achievements</h3>
-            <p className="text-4xl font-bold text-neon-magenta mb-1">{badges.filter(b => b.earned).length}/{badges.length}</p>
+            <p className="text-4xl font-bold text-neon-magenta mb-1">{earnedBadgesCount}/{achievementsTotal}</p>
             <p className="text-sm text-muted-foreground">Badges Earned</p>
           </div>
 

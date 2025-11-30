@@ -114,6 +114,16 @@ Profile API:
     - `level`
     - `total_poin`
 
+- `GET /api/progress/summary/` - progress snapshot for the logged-in user (requires JWT):
+  - Returns per-user counts so progress does not leak between accounts:
+    - `missions_completed` (MateriSelesai for this profile)
+    - `total_missions`
+    - `quizzes_completed`
+    - `badges_earned`
+    - `level`
+    - `total_poin`
+
+
 - `PUT /api/profil/` – update profile (requires JWT):
   - Currently used mainly for updating `avatar`.
   - Accepts `multipart/form-data` with `avatar` file.

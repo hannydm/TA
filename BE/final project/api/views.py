@@ -178,21 +178,29 @@ def submit_skor_view(request):
             profil.save()
             
             # --- LOGIKA BADGES ---
-            # Cek apakah user sudah menyelesaikan modul terkait aktivitas ini?
-            # Syarat: Selesaikan materi terakhir di modul ini DAN lulus kuis ini.
-            # Kita asumsikan kuis ini adalah bagian dari materi terakhir atau syarat akhir.
-            
+            # Badge hanya diberikan jika:
+            # 1) aktivitas ini adalah quiz modul (PILIHAN_GANDA)
+            # 2) seluruh materi di modul tersebut telah ditandai selesai oleh user
             modul = aktivitas.materi.modul
             lencana_baru = None
-            
-            # Cek apakah ada lencana untuk modul ini
             try:
                 lencana = Lencana.objects.get(modul_terkait=modul)
-                # Cek apakah user sudah punya lencana ini
-                if not LencanaSiswa.objects.filter(profil_siswa=profil, lencana=lencana).exists():
-                    # Berikan lencana!
-                    LencanaSiswa.objects.create(profil_siswa=profil, lencana=lencana)
-                    lencana_baru = lencana.nama
+
+                # Hitung progres modul
+                modul_materi_qs = modul.materi_set.all()
+                total_materi = modul_materi_qs.count()
+                selesai_count = MateriSelesai.objects.filter(
+                    profil_siswa=profil,
+                    materi__in=modul_materi_qs
+                ).count()
+
+                all_materials_done = total_materi > 0 and selesai_count == total_materi
+                finished_quiz = aktivitas.tipe_aktivitas == 'PILIHAN_GANDA'
+
+                if finished_quiz and all_materials_done:
+                    if not LencanaSiswa.objects.filter(profil_siswa=profil, lencana=lencana).exists():
+                        LencanaSiswa.objects.create(profil_siswa=profil, lencana=lencana)
+                        lencana_baru = lencana.nama
             except Lencana.DoesNotExist:
                 pass
             
@@ -410,6 +418,39 @@ def leaderboard_stats_view(request):
             'xp_today': xp_today,
             'active_now': active_now,
         }
+        return Response(data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response(
+            {"error": f"Terjadi kesalahan: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def progress_summary_view(request):
+    """
+    Statistik progres spesifik untuk pengguna yang sedang login.
+    Memastikan data misi dan XP tidak tercampur antar akun.
+    """
+    try:
+        profil, _ = ProfilSiswa.objects.get_or_create(user=request.user)
+
+        missions_completed = MateriSelesai.objects.filter(profil_siswa=profil).count()
+        total_missions = Materi.objects.count()
+        quizzes_completed = HasilAktivitas.objects.filter(profil_siswa=profil).count()
+        badges_earned = LencanaSiswa.objects.filter(profil_siswa=profil).count()
+
+        data = {
+            "missions_completed": missions_completed,
+            "total_missions": total_missions,
+            "quizzes_completed": quizzes_completed,
+            "badges_earned": badges_earned,
+            "level": profil.level,
+            "total_poin": profil.total_poin,
+        }
+
         return Response(data, status=status.HTTP_200_OK)
 
     except Exception as e:

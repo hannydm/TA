@@ -43,41 +43,43 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const ACCESS_TOKEN_KEY = 'digi_world_access_token';
-const LAST_ACTIVE_KEY = 'digi_world_last_active';
-const MAX_IDLE_MS = 10 * 60 * 1000; // 10 minutes
-
-const getLastActive = (): number | null => {
-  if (typeof window === 'undefined') return null;
-  const raw = window.localStorage.getItem(LAST_ACTIVE_KEY);
-  if (!raw) return null;
-  const ts = Number(raw);
-  return Number.isFinite(ts) ? ts : null;
-};
-
-const touchLastActive = () => {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(LAST_ACTIVE_KEY, Date.now().toString());
-};
+const REFRESH_TOKEN_KEY = 'digi_world_refresh_token';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(() =>
     typeof window === 'undefined' ? null : localStorage.getItem(ACCESS_TOKEN_KEY)
   );
+  const [refreshToken, setRefreshToken] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : localStorage.getItem(REFRESH_TOKEN_KEY)
+  );
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const storeToken = useCallback((access: string | null) => {
-    if (typeof window === 'undefined') return;
-    if (access) {
-      localStorage.setItem(ACCESS_TOKEN_KEY, access);
-      touchLastActive();
-    } else {
-      localStorage.removeItem(ACCESS_TOKEN_KEY);
-      localStorage.removeItem(LAST_ACTIVE_KEY);
-    }
-    setAccessToken(access);
-  }, []);
+  const storeTokens = useCallback(
+    (tokens: { access?: string | null; refresh?: string | null }) => {
+      if (typeof window === 'undefined') return;
+
+      if (tokens.access !== undefined) {
+        if (tokens.access) {
+          localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access);
+        } else {
+          localStorage.removeItem(ACCESS_TOKEN_KEY);
+        }
+        setAccessToken(tokens.access ?? null);
+      }
+
+      if (tokens.refresh !== undefined) {
+        if (tokens.refresh) {
+          localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh);
+        } else {
+          localStorage.removeItem(REFRESH_TOKEN_KEY);
+        }
+        setRefreshToken(tokens.refresh ?? null);
+      }
+    },
+    []
+  );
 
   const syncGameStateUser = useCallback((apiProfile: ProfileResponse | null) => {
     if (!apiProfile) {
@@ -115,10 +117,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearAuth = useCallback(() => {
-    storeToken(null);
+    storeTokens({ access: null, refresh: null });
     setProfile(null);
     syncGameStateUser(null);
-  }, [storeToken, syncGameStateUser]);
+  }, [storeTokens, syncGameStateUser]);
+
+  const refreshAccessToken = useCallback(async () => {
+    if (!refreshToken) return null;
+
+    try {
+      const response = await fetch(buildApiUrl('/api/token/refresh/'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh: refreshToken }),
+      });
+
+      if (!response.ok) {
+        clearAuth();
+        return null;
+      }
+
+      const data = await response.json();
+      if (data?.access) {
+        storeTokens({ access: data.access });
+        return data.access as string;
+      }
+
+      clearAuth();
+      return null;
+    } catch (error) {
+      console.error('Failed to refresh access token', error);
+      clearAuth();
+      return null;
+    }
+  }, [refreshToken, clearAuth, storeTokens]);
 
   const fetchProfile = useCallback(
     async (tokenOverride?: string | null) => {
@@ -129,29 +161,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      const response = await fetch(buildApiUrl('/api/profil/'), {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const requestProfile = async (rawToken: string) => {
+        const response = await fetch(buildApiUrl('/api/profil/'), {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${rawToken}`,
+          },
+        });
 
-      if (response.status === 401) {
-        // Anggap token tidak valid, bersihkan dan jangan loop.
-        clearAuth();
-        return null;
+        if (response.status === 401) {
+          throw await buildApiError(response);
+        }
+
+        if (!response.ok) {
+          throw await buildApiError(response);
+        }
+
+        const data: ProfileResponse = await response.json();
+        setProfile(data);
+        syncGameStateUser(data);
+        return data;
+      };
+
+      try {
+        return await requestProfile(token);
+      } catch (error: any) {
+        if (!tokenOverride && error?.status === 401) {
+          const newToken = await refreshAccessToken();
+          if (newToken) {
+            return requestProfile(newToken);
+          }
+          clearAuth();
+          return null;
+        }
+        throw error;
       }
-
-      if (!response.ok) {
-        throw await buildApiError(response);
-      }
-
-      const data: ProfileResponse = await response.json();
-      setProfile(data);
-      syncGameStateUser(data);
-      return data;
     },
-    [accessToken, clearAuth, syncGameStateUser]
+    [accessToken, clearAuth, refreshAccessToken, syncGameStateUser]
   );
 
   const signIn = useCallback(
@@ -168,7 +214,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const data = await response.json();
-        storeToken(data.access);
+        // Reset local profile to avoid progress leak when switching accounts.
+        setProfile(null);
+        syncGameStateUser(null);
+        storeTokens({ access: data.access, refresh: data.refresh });
 
         // Setelah login, coba ambil profil nyata dari backend.
         try {
@@ -194,7 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error };
       }
     },
-    [storeToken, fetchProfile, syncGameStateUser]
+    [storeTokens, fetchProfile, syncGameStateUser]
   );
 
   const signUp = useCallback(
@@ -237,38 +286,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const authFetch = useCallback(
     async <T,>(path: string, options: RequestInit = {}) => {
-      if (!accessToken) {
+      const performRequest = async (token: string) => {
+        const headers = new Headers(options.headers || {});
+        if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
+          headers.set('Content-Type', 'application/json');
+        }
+        headers.set('Authorization', `Bearer ${token}`);
+
+        const response = await fetch(buildApiUrl(path), { ...options, headers });
+        if (response.status === 401) {
+          throw await buildApiError(response);
+        }
+        if (!response.ok) {
+          throw await buildApiError(response);
+        }
+        return (await parseJson(response)) as T;
+      };
+
+      let token = accessToken;
+
+      if (!token && refreshToken) {
+        token = await refreshAccessToken();
+      }
+
+      if (!token) {
         throw new Error('Not authenticated');
       }
 
-      // Cek idle timeout berdasarkan aktivitas terakhir.
-      const last = getLastActive();
-      // Increase timeout to 24 hours for better UX, or remove strict check if causing issues
-      const EXTENDED_TIMEOUT = 24 * 60 * 60 * 1000;
-      if (!last || Date.now() - last > EXTENDED_TIMEOUT) {
-        clearAuth();
-        throw new Error('Session expired due to inactivity');
+      try {
+        return await performRequest(token);
+      } catch (error: any) {
+        if (error?.status === 401) {
+          const newToken = await refreshAccessToken();
+          if (newToken) {
+            return performRequest(newToken);
+          }
+          clearAuth();
+        }
+        throw error;
       }
-
-      touchLastActive();
-
-      const headers = new Headers(options.headers || {});
-      if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
-        headers.set('Content-Type', 'application/json');
-      }
-      headers.set('Authorization', `Bearer ${accessToken}`);
-
-      const response = await fetch(buildApiUrl(path), { ...options, headers });
-      if (response.status === 401) {
-        clearAuth();
-        throw await buildApiError(response);
-      }
-      if (!response.ok) {
-        throw await buildApiError(response);
-      }
-      return (await parseJson(response)) as T;
     },
-    [accessToken, clearAuth]
+    [accessToken, refreshToken, clearAuth, refreshAccessToken]
   );
 
   const refreshProfile = useCallback(async () => {
@@ -284,23 +342,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Saat aplikasi pertama kali dimuat, coba pulihkan sesi
   useEffect(() => {
-    if (!accessToken) return;
-    const last = getLastActive();
-    const EXTENDED_TIMEOUT = 24 * 60 * 60 * 1000;
-    if (!last || Date.now() - last > EXTENDED_TIMEOUT) {
-      clearAuth();
-      return;
-    }
+    if (!accessToken && !refreshToken) return;
 
-    setLoading(true);
-    fetchProfile()
-      .catch((error) => {
+    const restoreSession = async () => {
+      setLoading(true);
+      try {
+        if (!accessToken && refreshToken) {
+          await refreshAccessToken();
+        }
+        await fetchProfile();
+      } catch (error) {
         console.error('Failed to restore session', error);
-      })
-      .finally(() => {
+      } finally {
         setLoading(false);
-      });
-  }, [accessToken, clearAuth, fetchProfile]);
+      }
+    };
+
+    restoreSession();
+  }, [accessToken, refreshToken, fetchProfile, refreshAccessToken]);
 
   const value: AuthContextType = {
     profile,

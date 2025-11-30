@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Brain, Clock, CheckCircle, X, Zap, Trophy, ArrowRight } from 'lucide-react';
 import { quizQuestions } from '@/lib/gameState';
 import XPToast from '@/components/XPToast';
+import NotificationToast from '@/components/NotificationToast';
 import { useAuth } from '@/hooks/useAuth';
 
 interface QuizState {
@@ -42,6 +43,8 @@ const Quiz = () => {
     timeLeft: 300 // 5 minutes
   });
   const [showXPToast, setShowXPToast] = useState<number | null>(null);
+  const [levelUpToast, setLevelUpToast] = useState<number | null>(null);
+  const [badgeToast, setBadgeToast] = useState<string | null>(null);
   const [apiQuizzes, setApiQuizzes] = useState<ApiAktivitasQuiz[]>([]);
   const { authFetch, refreshProfile } = useAuth();
 
@@ -217,10 +220,11 @@ const Quiz = () => {
             }),
           });
 
-          // Handle Level Up & Badges from response
-          if (response.level_up) {
-            // You might want to show a level up modal here, but Dashboard handles it via state.
-            // We can trigger a refresh profile to update local state.
+          if (response?.level_up && response?.new_level) {
+            setLevelUpToast(response.new_level);
+          }
+          if (response?.new_badge) {
+            setBadgeToast(response.new_badge);
           }
 
           // Tandai materi terkait sebagai selesai
@@ -304,9 +308,9 @@ const Quiz = () => {
                 <p className={`font-medium ${isExcellent ? 'text-neon-cyan' :
                   isGood ? 'text-success' : 'text-warning'
                   }`}>
-                  {isExcellent ? '🌟 Excellent! Space Commander Performance!' :
-                    isGood ? '👍 Good Work! Keep Exploring!' :
-                      '📚 Study More to Master the Cosmos!'}
+                  {isExcellent ? 'Excellent! Space Commander Performance!' :
+                    isGood ? 'Good Work! Keep Exploring!' :
+                      'Keep studying to master the cosmos!'}
                 </p>
               </div>
 
@@ -322,6 +326,36 @@ const Quiz = () => {
                     <span className="text-neon-magenta font-medium">+30 XP</span>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Answer Summary */}
+            <div className="mission-card p-6 text-left">
+              <h3 className="text-lg font-bold text-foreground mb-4">Rangkuman Jawaban</h3>
+              <div className="space-y-3">
+                {questions.map((q, idx) => {
+                  const chosenIdx = quizState.selectedAnswers[idx];
+                  const isCorrect = chosenIdx === q.correct;
+                  const chosenText = chosenIdx === undefined ? 'Tidak ada jawaban' : q.options[chosenIdx] || 'Tidak ada jawaban';
+                  return (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-lg border border-border bg-surface/30"
+                    >
+                      <p className="font-semibold text-foreground mb-1">
+                        {idx + 1}. {q.question}
+                      </p>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm">
+                        <span className={isCorrect ? 'text-success font-semibold' : 'text-destructive font-semibold'}>
+                          {isCorrect ? 'Benar' : 'Salah'}
+                        </span>
+                        <span className="text-muted-foreground">
+                          Jawaban kamu: {chosenText}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -350,6 +384,22 @@ const Quiz = () => {
             onComplete={() => setShowXPToast(null)}
           />
         )}
+        {levelUpToast && (
+          <NotificationToast
+            type="levelup"
+            title="Level Up!"
+            message={`Kamu naik ke level ${levelUpToast}. Hebat!`}
+            onClose={() => setLevelUpToast(null)}
+          />
+        )}
+        {badgeToast && (
+          <NotificationToast
+            type="badge"
+            title="Badge Baru!"
+            message={`Selamat, kamu mendapatkan badge ${badgeToast}.`}
+            onClose={() => setBadgeToast(null)}
+          />
+        )}
       </div>
     );
   }
@@ -369,7 +419,7 @@ const Quiz = () => {
                 onClick={handleBackToQuizzes}
                 className="text-muted-foreground hover:text-neon-cyan transition-colors"
               >
-                ← Back to Quizzes
+                Back to Quizzes
               </button>
               <div className="flex items-center space-x-2 text-muted-foreground">
                 <Clock className="w-4 h-4" />
@@ -450,6 +500,23 @@ const Quiz = () => {
             </div>
           </div>
         </div>
+
+        {levelUpToast && (
+          <NotificationToast
+            type="levelup"
+            title="Level Up!"
+            message={`Kamu naik ke level ${levelUpToast}. Hebat!`}
+            onClose={() => setLevelUpToast(null)}
+          />
+        )}
+        {badgeToast && (
+          <NotificationToast
+            type="badge"
+            title="Badge Baru!"
+            message={`Selamat, kamu mendapatkan badge ${badgeToast}.`}
+            onClose={() => setBadgeToast(null)}
+          />
+        )}
       </div>
     );
   }
@@ -575,6 +642,23 @@ const Quiz = () => {
           </div>
         </div>
       </div>
+
+      {levelUpToast && (
+        <NotificationToast
+          type="levelup"
+          title="Level Up!"
+          message={`Kamu naik ke level ${levelUpToast}. Hebat!`}
+          onClose={() => setLevelUpToast(null)}
+        />
+      )}
+      {badgeToast && (
+        <NotificationToast
+          type="badge"
+          title="Badge Baru!"
+          message={`Selamat, kamu mendapatkan badge ${badgeToast}.`}
+          onClose={() => setBadgeToast(null)}
+        />
+      )}
     </div>
   );
 };

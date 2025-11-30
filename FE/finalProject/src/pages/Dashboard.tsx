@@ -26,6 +26,15 @@ interface LeaderboardItem {
   total_poin: number;
 }
 
+interface ProgressSummary {
+  missions_completed: number;
+  total_missions: number;
+  quizzes_completed: number;
+  badges_earned: number;
+  level: number;
+  total_poin: number;
+}
+
 const Dashboard = () => {
   const [user, setUser] = useState<User>(gameState.getUser());
   const [showXPToast, setShowXPToast] = useState<number | null>(null);
@@ -41,6 +50,7 @@ const Dashboard = () => {
   });
 
   const [leaderboard, setLeaderboard] = useState<LeaderboardItem[]>([]);
+  const [progress, setProgress] = useState<ProgressSummary | null>(null);
 
   useEffect(() => {
     const unsubscribe = gameState.subscribe(setUser);
@@ -48,15 +58,27 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
+    if (!profile) {
+      setProgress(null);
+    }
+  }, [profile]);
+
+  useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const statsData = await authFetch<DashboardStats>('/api/leaderboard/stats/');
+        const [statsData, leaderboardData, progressData] = await Promise.all([
+          authFetch<DashboardStats>('/api/leaderboard/stats/'),
+          authFetch<LeaderboardItem[]>('/api/leaderboard/'),
+          authFetch<ProgressSummary>('/api/progress/summary/'),
+        ]);
+
         setStats(statsData);
 
-        const leaderboardData = await authFetch<LeaderboardItem[]>('/api/leaderboard/');
         if (Array.isArray(leaderboardData)) {
           setLeaderboard(leaderboardData.slice(0, 5));
         }
+
+        setProgress(progressData);
       } catch (error) {
         console.error('Failed to load dashboard data', error);
       }
@@ -65,13 +87,13 @@ const Dashboard = () => {
     fetchDashboardData();
   }, [authFetch]);
 
-  const xpPercentage = (user.xp / user.maxXp) * 100;
-
   // Level Calculation Logic
-  const totalXP = profile?.total_poin || user.xp;
-  const currentLevel = Math.floor(0.5 + Math.sqrt(0.25 + (totalXP / 50)));
-  const xpForCurrentLevel = 50 * (currentLevel - 1) * currentLevel;
-  const xpForNextLevel = 50 * currentLevel * (currentLevel + 1);
+  const totalXP = progress?.total_poin ?? profile?.total_poin ?? user.xp;
+  const derivedLevel = Math.floor(0.5 + Math.sqrt(0.25 + (totalXP / 50)));
+  const currentLevel = progress?.level ?? profile?.level ?? derivedLevel;
+  const levelForProgress = currentLevel || derivedLevel || 1;
+  const xpForCurrentLevel = 50 * (levelForProgress - 1) * levelForProgress;
+  const xpForNextLevel = 50 * levelForProgress * (levelForProgress + 1);
   const levelProgress = totalXP - xpForCurrentLevel;
   const levelRange = xpForNextLevel - xpForCurrentLevel;
   const percentage = Math.min(100, Math.max(0, (levelProgress / levelRange) * 100));
@@ -120,7 +142,7 @@ const Dashboard = () => {
                 )}
               </div>
               <h3 className="text-xl font-bold text-foreground">{displayName}</h3>
-              <p className="text-neon-cyan font-medium">Explorer • Level {profile?.level || user.level}</p>
+              <p className="text-neon-cyan font-medium">Explorer - Level {currentLevel}</p>
             </div>
 
             {/* XP Progress */}
@@ -140,12 +162,14 @@ const Dashboard = () => {
             {/* Quick Stats */}
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 rounded-lg bg-surface/50">
-                <div className="flex items-center space-x-2">
-                  <CheckCircle className="w-5 h-5 text-mission-completed" />
-                  <span className="text-sm">Missions Completed</span>
-                </div>
-                <span className="font-bold text-neon-cyan">{stats.missions_completed}</span>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="w-5 h-5 text-mission-completed" />
+                <span className="text-sm">Missions Completed</span>
               </div>
+              <span className="font-bold text-neon-cyan">
+                {progress?.missions_completed ?? stats.missions_completed}
+              </span>
+            </div>
 
               <div className="flex items-center justify-between p-3 rounded-lg bg-surface/50">
                 <div className="flex items-center space-x-2">
