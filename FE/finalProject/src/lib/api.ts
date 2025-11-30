@@ -1,9 +1,9 @@
 const computeDefaultBase = () => {
   if (typeof window === 'undefined') {
-    return 'http://127.0.0.1:7000';
+    return 'http://127.0.0.1:8000';
   }
   const { protocol, hostname } = window.location;
-  const defaultPort = '7000';
+  const defaultPort = '8000';
   return `${protocol}//${hostname}:${defaultPort}`;
 };
 
