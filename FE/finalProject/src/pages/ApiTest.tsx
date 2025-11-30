@@ -14,7 +14,7 @@ const ApiTest = () => {
     const ambilData = async () => {
       try {
         // Panggil URL API yang sudah kita buat di Django
-        const response = await fetch('http://127.0.0.1:8000/api/test/');
+        const response = await fetch('http://127.0.0.1:7000/api/test/');
         
         // Jika response gagal (bukan status 200-299), lempar error
         if (!response.ok) {
