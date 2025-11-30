@@ -9,3 +9,4 @@ class Command(StaticfilesRunserverCommand):
         print("✅ Custom runserver loaded! Defaulting to 0.0.0.0:8000")
         print("----------------------------------------------------------------------")
         super().handle(*args, **options)
+

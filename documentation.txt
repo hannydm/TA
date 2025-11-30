@@ -442,7 +442,7 @@ Install Gunicorn into the same venv:
 
 Test Gunicorn:
 
-    gunicorn digi_world.wsgi:application --bind 127.0.0.1:8000
+    gunicorn digi_world.wsgi:application --bind 127.0.0.1:7000
 
 If that works, stop it and create a systemd service:
 
@@ -462,7 +462,7 @@ Example content:
     WorkingDirectory=/opt/ta/BE/final\ project
     Environment="DJANGO_SETTINGS_MODULE=digi_world.settings"
     EnvironmentFile=/opt/ta/BE/final\ project/.env
-    ExecStart=/opt/ta/BE/final\ project/venv/bin/gunicorn digi_world.wsgi:application --bind 127.0.0.1:8000
+    ExecStart=/opt/ta/BE/final\ project/venv/bin/gunicorn digi_world.wsgi:application --bind 127.0.0.1:7000
     Restart=always
 
     [Install]
@@ -510,7 +510,7 @@ relative to the backend directory. Ensure that:
 Configure Nginx to:
 
 - Serve the React build at `/`.
-- Proxy API requests to Gunicorn at `127.0.0.1:8000`.
+- Proxy API requests to Gunicorn at `127.0.0.1:7000`.
 - Serve media files (uploaded avatars).
 
 Create a new Nginx server block, e.g. `/etc/nginx/sites-available/digi_world`:
