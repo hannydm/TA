@@ -65,9 +65,13 @@ const PuzzleActivity = ({ material, onComplete }: { material: Material; onComple
 
   useEffect(() => {
     if (material.puzzleBlocks) {
-      // Split and shuffle slightly or just use as is (assuming backend sends them shuffled or we shuffle)
-      const blocks = material.puzzleBlocks.split(',').map(b => b.trim()).filter(b => b);
-      setAvailableBlocks(blocks);
+      // Split and acak blok kode agar urutannya berbeda dari jawaban
+      const blocks = material.puzzleBlocks
+        .split(',')
+        .map((b) => b.trim())
+        .filter((b) => b);
+      const shuffled = [...blocks].sort(() => Math.random() - 0.5);
+      setAvailableBlocks(shuffled);
       setUserSequence([]);
       setMessage(null);
     }

@@ -54,8 +54,9 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        # Tentukan field User yang boleh dibaca
-        fields = ['username', 'email', 'first_name', 'last_name']
+        # Tambahkan is_staff supaya frontend bisa tahu akun guru/admin
+        fields = ['username', 'email', 'first_name', 'last_name', 'is_staff']
+        read_only_fields = fields
 
 
 # Profil untuk dibaca frontend (level, poin, avatar)
@@ -216,7 +217,7 @@ class LencanaSerializer(serializers.ModelSerializer):
         model = Lencana
         # DIPERBAIKI: Gunakan field yang ADA di model Anda
         # (Berdasarkan pesan error, Anda punya 'nama' bukan 'nama_lencana')
-        fields = ['id', 'nama', 'deskripsi', 'modul_terkait']
+        fields = ['id', 'nama', 'deskripsi', 'modul_terkait', 'jenis', 'syarat_quiz_count']
         # (Tambahkan 'ikon' HANYA JIKA Anda punya field itu di model Anda) 
 
 

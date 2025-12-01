@@ -71,9 +71,17 @@ class HasilAktivitas(models.Model):
 
 # Model Lencana dan MateriSelesai tidak berubah
 class Lencana(models.Model):
+    BADGE_TYPE_CHOICES = [
+        ('MODULE_COMPLETE', 'Selesaikan Modul'),
+        ('QUIZ_COUNT', 'Jumlah Quiz Selesai'),
+    ]
+
     nama = models.CharField(max_length=100)
     deskripsi = models.CharField(max_length=255)
     modul_terkait = models.OneToOneField(Modul, on_delete=models.SET_NULL, null=True, blank=True)
+    jenis = models.CharField(max_length=20, choices=BADGE_TYPE_CHOICES, default='MODULE_COMPLETE')
+    syarat_quiz_count = models.IntegerField(null=True, blank=True)
+
     def __str__(self): return self.nama
 
 class LencanaSiswa(models.Model):

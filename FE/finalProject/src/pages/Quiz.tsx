@@ -35,7 +35,7 @@ interface ApiAktivitasQuiz {
 }
 
 const Quiz = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedQuiz, setSelectedQuiz] = useState<string | null>(null);
   const [quizState, setQuizState] = useState<QuizState>({
     currentQuestion: 0,
@@ -48,11 +48,12 @@ const Quiz = () => {
   const [levelUpToast, setLevelUpToast] = useState<number | null>(null);
   const [badgeToast, setBadgeToast] = useState<string | null>(null);
   const [apiQuizzes, setApiQuizzes] = useState<ApiAktivitasQuiz[]>([]);
-  const { authFetch, refreshProfile } = useAuth();
+  const { authFetch, refreshProfile, profile } = useAuth();
   const [isMuted, setIsMuted] = useState(false);
 
   // Audio State
   const bgmRef = useRef<HTMLAudioElement | null>(null);
+  const quizSfxRef = useRef<HTMLAudioElement | null>(null);
 
   // Initialize background music
   useEffect(() => {
@@ -65,8 +66,33 @@ const Quiz = () => {
         bgmRef.current.pause();
         bgmRef.current = null;
       }
+      if (quizSfxRef.current) {
+        quizSfxRef.current.pause();
+        quizSfxRef.current = null;
+      }
     };
   }, []);
+
+  // Initialize quiz SFX (short click / confirm sound)
+  useEffect(() => {
+    quizSfxRef.current = new Audio(
+      'https://cdn.pixabay.com/download/audio/2022/03/15/audio_ae9b2c2727.mp3?filename=click-soft-124467.mp3',
+    );
+    if (quizSfxRef.current) {
+      quizSfxRef.current.volume = 0.4;
+    }
+  }, []);
+
+  const playQuizSfx = () => {
+    if (isMuted || !quizSfxRef.current) return;
+    try {
+      const clone = quizSfxRef.current.cloneNode(true) as HTMLAudioElement;
+      clone.volume = quizSfxRef.current.volume;
+      clone.play().catch(() => {});
+    } catch {
+      // ignore audio errors
+    }
+  };
 
   // Control background music based on quiz state
   useEffect(() => {
@@ -177,7 +203,10 @@ const Quiz = () => {
     return () => clearInterval(timer);
   }, [selectedQuiz, quizState.showResults]);
 
-  const QUIZ_HISTORY_PREFIX = 'digi_world_quiz_history_';
+  const userKey =
+    profile?.user?.username ||
+    (profile?.user?.email ? profile.user.email.split('@')[0] : 'guest');
+  const QUIZ_HISTORY_PREFIX = `digi_world_quiz_history_${userKey}_`;
   const NEXT_QUIZ_KEY = 'digi_world_next_quiz';
 
   const loadQuizHistory = (quizId: string) => {
@@ -241,6 +270,7 @@ const Quiz = () => {
     const newAnswers = [...quizState.selectedAnswers];
     newAnswers[quizState.currentQuestion] = answerIndex;
     setQuizState({ ...quizState, selectedAnswers: newAnswers });
+    playQuizSfx();
   };
 
   const handleNext = () => {
@@ -341,6 +371,8 @@ const Quiz = () => {
       score: 0,
       timeLeft: 300
     });
+    // Hapus query ?id=... supaya quiz tidak otomatis terbuka lagi
+    setSearchParams({});
   };
 
   // Quiz Results View
@@ -474,6 +506,7 @@ const Quiz = () => {
             title="Level Up!"
             message={`Kamu naik ke level ${levelUpToast}. Hebat!`}
             onClose={() => setLevelUpToast(null)}
+            duration={5000}
           />
         )}
         {badgeToast && (
@@ -482,6 +515,7 @@ const Quiz = () => {
             title="Badge Baru!"
             message={`Selamat, kamu mendapatkan badge ${badgeToast}.`}
             onClose={() => setBadgeToast(null)}
+            duration={5000}
           />
         )}
       </div>
@@ -600,6 +634,7 @@ const Quiz = () => {
             title="Level Up!"
             message={`Kamu naik ke level ${levelUpToast}. Hebat!`}
             onClose={() => setLevelUpToast(null)}
+            duration={5000}
           />
         )}
         {badgeToast && (
@@ -608,6 +643,7 @@ const Quiz = () => {
             title="Badge Baru!"
             message={`Selamat, kamu mendapatkan badge ${badgeToast}.`}
             onClose={() => setBadgeToast(null)}
+            duration={5000}
           />
         )}
       </div>
@@ -742,6 +778,7 @@ const Quiz = () => {
           title="Level Up!"
           message={`Kamu naik ke level ${levelUpToast}. Hebat!`}
           onClose={() => setLevelUpToast(null)}
+          duration={5000}
         />
       )}
       {badgeToast && (
@@ -750,6 +787,7 @@ const Quiz = () => {
           title="Badge Baru!"
           message={`Selamat, kamu mendapatkan badge ${badgeToast}.`}
           onClose={() => setBadgeToast(null)}
+          duration={5000}
         />
       )}
     </div>

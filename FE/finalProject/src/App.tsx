@@ -14,6 +14,7 @@ import Materials from "./pages/Materials";
 import Modules from "./pages/Modules";
 import Quiz from "./pages/Quiz";
 import Leaderboard from "./pages/Leaderboard";
+import TeacherPanel from "./pages/TeacherPanel";
 import GameLayout from "./components/GameLayout";
 import NotFound from "./pages/NotFound";
 import ApiTest from "./pages/ApiTest";
@@ -42,6 +43,7 @@ const App = () => (
               <Route path="/quiz" element={<Quiz />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/api-test" element={<ApiTest />} />
+              <Route path="/teacher" element={<TeacherPanel />} />
             </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

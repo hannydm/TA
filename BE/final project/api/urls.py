@@ -21,4 +21,17 @@ urlpatterns = [
     path('lencana-saya/', views.lencana_saya_view, name='lencana-saya'),
     path('quiz/', views.daftar_quiz_view, name='daftar-quiz'),
     path('recent-activity/', views.recent_activity_view, name='recent-activity'),
+    # Teacher / guru panel
+    path('teacher/students/', views.teacher_students_overview_view, name='teacher-students'),
+    path('teacher/modules/', views.teacher_modules_view, name='teacher-modules'),
+    path('teacher/modules/<int:modul_id>/', views.teacher_update_module_view, name='teacher-update-module'),
+    path('teacher/materials/create/', views.teacher_create_material_view, name='teacher-create-material'),
+    path('teacher/materials/<int:materi_id>/', views.teacher_update_material_view, name='teacher-update-material'),
+    path('teacher/quizzes/create/', views.teacher_create_quiz_view, name='teacher-create-quiz'),
+    path('teacher/puzzles/create/', views.teacher_create_puzzle_view, name='teacher-create-puzzle'),
+    path('teacher/livecode/create/', views.teacher_create_livecode_view, name='teacher-create-livecode'),
+    path('teacher/students/<int:profil_id>/detail/', views.teacher_student_detail_view, name='teacher-student-detail'),
+    path('teacher/teachers/', views.teacher_list_view, name='teacher-list'),
+    path('teacher/badges/', views.teacher_badges_view, name='teacher-badges'),
+    path('teacher/badges/<int:badge_id>/', views.teacher_badge_detail_view, name='teacher-badge-detail'),
 ]

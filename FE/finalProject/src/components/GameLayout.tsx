@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { User, Rocket, BookOpen, Trophy, LogOut, Zap, Menu, X } from 'lucide-react';
+import { User, Rocket, BookOpen, Trophy, LogOut, Zap, Menu, X, GraduationCap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { gameState, User as UserType } from '@/lib/gameState';
 import { useAuth } from '@/hooks/useAuth';
@@ -64,12 +64,15 @@ const GameLayout = () => {
     }
   }
 
+  const isTeacher = !!profile.user?.is_staff;
+
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: Rocket },
     { path: '/profile', label: 'Profile', icon: User },
     { path: '/materials', label: 'Materials', icon: BookOpen },
     { path: '/quiz', label: 'Quizzes', icon: Zap },
     { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
+    ...(isTeacher ? [{ path: '/teacher', label: 'Teacher', icon: GraduationCap }] : []),
   ];
 
   return (
