@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { Trophy, Medal, Crown, Zap, TrendingUp, Calendar } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import type { ProfileResponse } from '@/hooks/useAuth';
+import { buildApiUrl, resolveAvatarUrl } from '@/lib/api';
 
 type LeaderboardPlayer = {
   rank: number;
   name: string;
   xp: number;
-  avatar: string;
+  avatarInitial: string;
+  avatarUrl: string | null;
   isCurrentUser: boolean;
 };
 
@@ -41,6 +43,9 @@ const Leaderboard = () => {
         const avatarInitial =
           (displayName || username).trim().charAt(0).toUpperCase() || 'E';
 
+        // Hitung URL avatar sama seperti di halaman Profile/Dashboard.
+          const avatarUrl = resolveAvatarUrl((entry as any).avatar);
+
         const isCurrentUser =
           !!profile && profile.user?.username === entry.user?.username;
 
@@ -48,30 +53,80 @@ const Leaderboard = () => {
           rank: index + 1,
           name: displayName,
           xp: entry.total_poin ?? 0,
-          avatar: avatarInitial,
+          avatarInitial,
+          avatarUrl,
           isCurrentUser,
         };
       });
 
     const loadLeaderboard = async () => {
+      // 1. All-time leaderboard (paling penting untuk tidak kosong)
       try {
-        const [overallData, weeklyData, statsData] = await Promise.all([
-          authFetch<ProfileResponse[]>('/api/leaderboard/'),
-          authFetch<ProfileResponse[]>('/api/leaderboard/weekly/'),
-          authFetch<LeaderboardStats>('/api/leaderboard/stats/'),
-        ]);
-
+        const overallData = await authFetch<ProfileResponse[]>(
+          '/api/leaderboard/',
+        );
         if (!cancelled && Array.isArray(overallData)) {
-          setOverallPlayers(mapEntries(overallData));
+          let mapped = mapEntries(overallData);
+
+          // Fallback: jika leaderboard dari backend kosong,
+          // setidaknya tampilkan profil user yang sedang login.
+          if (!mapped.length && profile) {
+            const username =
+              profile.user?.username ||
+              (profile.user?.email
+                ? profile.user.email.split('@')[0]
+                : 'Explorer');
+            const displayName =
+              [profile.user?.first_name, profile.user?.last_name]
+                .filter(Boolean)
+                .join(' ')
+                .trim() || username;
+            const avatarInitial =
+              (displayName || username).trim().charAt(0).toUpperCase() ||
+              'E';
+
+              const avatarUrl = resolveAvatarUrl((profile as any).avatar);
+
+            mapped = [
+              {
+                rank: 1,
+                name: displayName,
+                xp: profile.total_poin ?? 0,
+                avatarInitial,
+                avatarUrl,
+                isCurrentUser: true,
+              },
+            ];
+          }
+
+          setOverallPlayers(mapped);
         }
+      } catch (error) {
+        console.error('Failed to load overall leaderboard', error);
+      }
+
+      // 2. Weekly leaderboard – kalau gagal, jangan ganggu yang lain
+      try {
+        const weeklyData = await authFetch<ProfileResponse[]>(
+          '/api/leaderboard/weekly/',
+        );
         if (!cancelled && Array.isArray(weeklyData)) {
           setWeeklyPlayers(mapEntries(weeklyData));
         }
+      } catch (error) {
+        console.error('Failed to load weekly leaderboard', error);
+      }
+
+      // 3. Statistik pendukung
+      try {
+        const statsData = await authFetch<LeaderboardStats>(
+          '/api/leaderboard/stats/',
+        );
         if (!cancelled && statsData) {
           setStats(statsData);
         }
       } catch (error) {
-        console.error('Failed to load leaderboard', error);
+        console.error('Failed to load leaderboard stats', error);
       }
     };
 
@@ -87,7 +142,9 @@ const Leaderboard = () => {
       ? weeklyPlayers.length
         ? weeklyPlayers
         : overallPlayers
-      : overallPlayers;
+      : overallPlayers.length
+      ? overallPlayers
+      : weeklyPlayers;
 
   const hasPlayers = allPlayers.length > 0;
 
@@ -197,11 +254,19 @@ const Leaderboard = () => {
                         }`}
                       >
                         <div
-                          className={`w-14 h-14 mx-auto rounded-full bg-gradient-to-br ${getRankBadgeColor(
-                            player.rank,
-                          )} flex items-center justify-center text-xl font-bold mb-3 shadow-lg`}
-                        >
-                          {player.avatar}
+                        className={`w-14 h-14 mx-auto rounded-full bg-gradient-to-br ${getRankBadgeColor(
+                          player.rank,
+                        )} flex items-center justify-center text-xl font-bold mb-3 shadow-lg`}
+                      >
+                          {player.avatarUrl ? (
+                            <img
+                              src={player.avatarUrl}
+                              alt={player.name}
+                              className="w-full h-full rounded-full object-cover"
+                            />
+                          ) : (
+                            player.avatarInitial
+                          )}
                         </div>
                         <div className="mb-2 flex justify-center">
                           {getRankIcon(player.rank)}
@@ -247,7 +312,15 @@ const Leaderboard = () => {
                         </div>
 
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-base font-bold bg-gradient-to-br from-neon-cyan/20 to-neon-magenta/20 border border-border">
-                          {player.avatar}
+                          {player.avatarUrl ? (
+                            <img
+                              src={player.avatarUrl}
+                              alt={player.name}
+                              className="w-full h-full rounded-full object-cover"
+                            />
+                          ) : (
+                            player.avatarInitial
+                          )}
                         </div>
 
                         <div className="flex-1 min-w-0">
@@ -471,4 +544,3 @@ const Leaderboard = () => {
 };
 
 export default Leaderboard;
-

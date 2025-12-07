@@ -65,28 +65,36 @@ def registrasi_view(request):
             data = serializer.errors
             return Response(data, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['GET', 'PUT'])  # Endpoint ini bisa merespon GET dan PUT
+@api_view(['GET'])  # Endpoint ini sekarang hanya untuk baca profil
 @permission_classes([IsAuthenticated])  # WAJIB punya JWT untuk akses profil
 def profil_view(request):
     # request.user selalu user dari token JWT
     profil, _ = ProfilSiswa.objects.get_or_create(user=request.user)
+    serializer = ProfilSiswaSerializer(profil, many=False)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
-    if request.method == 'GET':
-        serializer = ProfilSiswaSerializer(profil, many=False)
-        return Response(serializer.data, status=status.HTTP_200_OK)
 
-    # PUT: izinkan update avatar saja (level & total_poin tetap dikontrol backend)
-    elif request.method == 'PUT':
-        serializer = ProfilSiswaSerializer(
-            instance=profil,
-            data=request.data,
-            partial=True,
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def profil_avatar_upload_view(request):
+    """
+    Endpoint khusus untuk mengunggah / mengganti avatar profil.
+    Diharapkan menerima FormData dengan field 'avatar'.
+    """
+    profil, _ = ProfilSiswa.objects.get_or_create(user=request.user)
+
+    avatar_file = request.FILES.get('avatar')
+    if avatar_file is None:
+        return Response(
+            {'avatar': ['File avatar tidak ditemukan dalam request.']},
+            status=status.HTTP_400_BAD_REQUEST,
         )
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    profil.avatar = avatar_file
+    profil.save()
+
+    serializer = ProfilSiswaSerializer(profil, many=False)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -277,40 +285,54 @@ def recent_activity_view(request):
     """
     profil = request.user.profilsiswa
     activities = []
-    
+
     # 1. Materi Selesai
     materi_selesai = MateriSelesai.objects.filter(profil_siswa=profil).select_related('materi')
     for ms in materi_selesai:
-        activities.append({
-            'type': 'material',
-            'title': f"Completed material: {ms.materi.judul}",
-            'date': ms.tanggal_selesai,
-            'xp': 10 # Asumsi base XP baca materi
-        })
-        
-    # 2. Hasil Aktivitas (Kuis)
-    hasil_kuis = HasilAktivitas.objects.filter(profil_siswa=profil).select_related('aktivitas', 'aktivitas__materi')
+        activities.append(
+            {
+                "type": "material",
+                "title": f"Completed material: {ms.materi.judul}",
+                "date": ms.tanggal_selesai,
+                "xp": 10,  # Asumsi base XP baca materi
+            }
+        )
+
+    # 2. Hasil Aktivitas (Kuis) - hanya ambil percobaan terbaru per aktivitas
+    hasil_kuis = (
+        HasilAktivitas.objects.filter(profil_siswa=profil)
+        .select_related("aktivitas", "aktivitas__materi")
+        .order_by("-tanggal_pengerjaan")
+    )
+    seen_activities = set()
     for hk in hasil_kuis:
-        activities.append({
-            'type': 'quiz',
-            'title': f"Completed quiz: {hk.aktivitas.materi.judul}",
-            'date': hk.tanggal_pengerjaan,
-            'xp': hk.skor
-        })
-        
+        if hk.aktivitas_id in seen_activities:
+            continue
+        seen_activities.add(hk.aktivitas_id)
+        activities.append(
+            {
+                "type": "quiz",
+                "title": f"Completed quiz: {hk.aktivitas.materi.judul}",
+                "date": hk.tanggal_pengerjaan,
+                "xp": hk.skor,
+            }
+        )
+
     # 3. Lencana
     lencana_siswa = LencanaSiswa.objects.filter(profil_siswa=profil).select_related('lencana')
     for ls in lencana_siswa:
-        activities.append({
-            'type': 'badge',
-            'title': f"Earned badge: {ls.lencana.nama}",
-            'date': ls.tanggal_didapat,
-            'xp': 0
-        })
-        
+        activities.append(
+            {
+                "type": "badge",
+                "title": f"Earned badge: {ls.lencana.nama}",
+                "date": ls.tanggal_didapat,
+                "xp": 0,
+            }
+        )
+
     # Sort by date descending
-    activities.sort(key=lambda x: x['date'], reverse=True)
-    
+    activities.sort(key=lambda x: x["date"], reverse=True)
+
     # Ambil 5 teratas
     return Response(activities[:5], status=status.HTTP_200_OK)
 
@@ -395,15 +417,24 @@ def leaderboard_weekly_view(request):
     try:
         tujuh_hari_lalu = timezone.now() - timedelta(days=7)
 
-        # Agregasi skor mingguan per profil_siswa dari HasilAktivitas
-        agregat = (
+        # Agregasi skor mingguan per profil_siswa dari HasilAktivitas.
+        # Hitung skor TERBAIK per aktivitas dalam 7 hari terakhir,
+        # lalu jumlahkan. Dengan cara ini, retake berkali-kali tidak
+        # menggandakan XP di leaderboard.
+        agregat_per_activity = (
             HasilAktivitas.objects
             .filter(
                 tanggal_pengerjaan__gte=tujuh_hari_lalu,
                 profil_siswa__user__is_staff=False,
             )
+            .values('profil_siswa', 'aktivitas')
+            .annotate(best=Max('skor'))
+        )
+
+        agregat = (
+            agregat_per_activity
             .values('profil_siswa')
-            .annotate(total=Sum('skor'))
+            .annotate(total=Sum('best'))
             .order_by('-total')[:10]
         )
 
@@ -446,14 +477,17 @@ def leaderboard_stats_view(request):
         total_explorers = ProfilSiswa.objects.filter(user__is_staff=False).count()
         missions_completed = MateriSelesai.objects.filter(profil_siswa__user__is_staff=False).count()
 
-        xp_today = (
+        # XP hari ini: jumlah skor TERBAIK per aktivitas yang dikerjakan hari ini.
+        agregat_today_per_activity = (
             HasilAktivitas.objects
             .filter(
                 tanggal_pengerjaan__gte=today_start,
                 profil_siswa__user__is_staff=False,
             )
-            .aggregate(total=Sum('skor'))['total'] or 0
+            .values('profil_siswa', 'aktivitas')
+            .annotate(best=Max('skor'))
         )
+        xp_today = agregat_today_per_activity.aggregate(total=Sum('best'))['total'] or 0
 
         active_now = (
             HasilAktivitas.objects
@@ -496,6 +530,20 @@ def progress_summary_view(request):
         quizzes_completed = HasilAktivitas.objects.filter(profil_siswa=profil).count()
         badges_earned = LencanaSiswa.objects.filter(profil_siswa=profil).count()
 
+        # XP yang didapat HARI INI untuk user ini saja.
+        now = timezone.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        agregat_today_per_activity = (
+            HasilAktivitas.objects
+            .filter(
+                profil_siswa=profil,
+                tanggal_pengerjaan__gte=today_start,
+            )
+            .values('aktivitas')
+            .annotate(best=Max('skor'))
+        )
+        xp_today = agregat_today_per_activity.aggregate(total=Sum('best'))['total'] or 0
+
         data = {
             "missions_completed": missions_completed,
             "total_missions": total_missions,
@@ -503,6 +551,7 @@ def progress_summary_view(request):
             "badges_earned": badges_earned,
             "level": profil.level,
             "total_poin": profil.total_poin,
+            "xp_today": xp_today,
         }
 
         return Response(data, status=status.HTTP_200_OK)
@@ -785,7 +834,7 @@ def teacher_badges_view(request):
   return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-@api_view(['PUT', 'DELETE'])
+@api_view(['PUT', 'DELETE', 'POST'])
 @permission_classes([IsAdminUser])
 def teacher_badge_detail_view(request, badge_id: int):
   """
@@ -828,76 +877,90 @@ def teacher_badge_detail_view(request, badge_id: int):
   serializer = LencanaSerializer(lencana)
   return Response(serializer.data, status=status.HTTP_200_OK)
 
-
 @api_view(['GET', 'POST'])
 @permission_classes([IsAdminUser])
 def teacher_modules_view(request):
-  """
-  GET  : daftar modul + ringkasan jumlah materi & aktivitas.
-  POST : membuat modul baru.
-  """
-  if request.method == 'POST':
-      judul = request.data.get('judul')
-      deskripsi = request.data.get('deskripsi', '')
-      urutan = request.data.get('urutan')
+    """
+    GET  : daftar modul + ringkasan jumlah materi & aktivitas.
+    POST : membuat modul baru.
+    """
+    if request.method == 'POST':
+        judul = request.data.get('judul')
+        deskripsi = request.data.get('deskripsi', '')
+        urutan = request.data.get('urutan')
 
-      if not judul:
-          return Response({"error": "Field 'judul' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+        if not judul:
+            return Response(
+                {"error": "Field 'judul' wajib diisi."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-      try:
-          if urutan is None:
-              # Jika urutan tidak diberikan, taruh di akhir
-              max_order = Modul.objects.aggregate(m=Sum('urutan'))['m'] or 0
-              urutan = max_order + 1
-          modul = Modul.objects.create(judul=judul, deskripsi=deskripsi, urutan=urutan)
-          serializer = ModulDetailSerializer(modul, context={'request': request})
-          return Response(serializer.data, status=status.HTTP_201_CREATED)
-      except Exception as e:
-          return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            if urutan is None:
+                # Jika urutan tidak diberikan, ambil urutan TERBESAR lalu +1
+                # agar tidak melanggar unique constraint pada field urutan.
+                max_order = Modul.objects.aggregate(m=Max("urutan"))["m"] or 0
+                urutan = max_order + 1
+            modul = Modul.objects.create(
+                judul=judul,
+                deskripsi=deskripsi,
+                urutan=urutan,
+            )
+            serializer = ModulDetailSerializer(modul, context={"request": request})
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-  # GET
-  modul_list = Modul.objects.all().order_by('urutan')
-  data = []
-  for modul in modul_list:
-      materi_qs = Materi.objects.filter(modul=modul)
-      materi_count = materi_qs.count()
-      aktivitas_count = Aktivitas.objects.filter(materi__in=materi_qs).count()
-      data.append(
-          {
-              "id": modul.id,
-              "judul": modul.judul,
-              "deskripsi": modul.deskripsi,
-              "urutan": modul.urutan,
-              "materi_count": materi_count,
-              "aktivitas_count": aktivitas_count,
-          }
-      )
-  return Response(data, status=status.HTTP_200_OK)
+    # GET
+    modul_list = Modul.objects.all().order_by("urutan")
+    data = []
+    for modul in modul_list:
+        materi_qs = Materi.objects.filter(modul=modul)
+        materi_count = materi_qs.count()
+        aktivitas_count = Aktivitas.objects.filter(materi__in=materi_qs).count()
+        data.append(
+            {
+                "id": modul.id,
+                "judul": modul.judul,
+                "deskripsi": modul.deskripsi,
+                "urutan": modul.urutan,
+                "materi_count": materi_count,
+                "aktivitas_count": aktivitas_count,
+            }
+        )
+    return Response(data, status=status.HTTP_200_OK)
 
 
-@api_view(['PUT'])
+@api_view(['PUT', 'POST'])
 @permission_classes([IsAdminUser])
 def teacher_update_module_view(request, modul_id: int):
-  """
-  Update data modul (judul, deskripsi, urutan).
-  """
-  modul = get_object_or_404(Modul, id=modul_id)
+    """
+    Update data modul (judul, deskripsi, urutan).
 
-  judul = request.data.get('judul', modul.judul)
-  deskripsi = request.data.get('deskripsi', modul.deskripsi)
-  urutan = request.data.get('urutan', modul.urutan)
+    Catatan:
+    - Secara ideal HTTP method yang dipakai adalah PUT.
+    - Namun beberapa environment / proxy membatasi method PUT dari browser.
+      Karena itu view ini juga mengizinkan POST ke URL yang sama sebagai
+      fallback, selama user tetap is_staff.
+    """
+    modul = get_object_or_404(Modul, id=modul_id)
 
-  modul.judul = judul
-  modul.deskripsi = deskripsi
-  try:
-      if urutan is not None:
-          modul.urutan = int(urutan)
-  except (TypeError, ValueError):
-      pass
+    judul = request.data.get('judul', modul.judul)
+    deskripsi = request.data.get('deskripsi', modul.deskripsi)
+    urutan = request.data.get('urutan', modul.urutan)
 
-  modul.save()
-  serializer = ModulDetailSerializer(modul, context={'request': request})
-  return Response(serializer.data, status=status.HTTP_200_OK)
+    modul.judul = judul
+    modul.deskripsi = deskripsi
+    try:
+        if urutan is not None:
+            modul.urutan = int(urutan)
+    except (TypeError, ValueError):
+        # Jika parsing urutan gagal, biarkan nilai lama agar tidak error.
+        pass
+
+    modul.save()
+    serializer = ModulDetailSerializer(modul, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
@@ -938,7 +1001,7 @@ def teacher_create_material_view(request):
       return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['PUT'])
+@api_view(['PUT', 'POST'])
 @permission_classes([IsAdminUser])
 def teacher_update_material_view(request, materi_id: int):
   """

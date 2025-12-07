@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { User as UserIcon, Trophy, Zap, Star, Calendar, Award, Camera } from 'lucide-react';
 import { gameState, User } from '@/lib/gameState';
 import { useAuth } from '@/hooks/useAuth';
-import { buildApiUrl } from '@/lib/api';
+import { buildApiUrl, resolveAvatarUrl } from '@/lib/api';
 
 interface ProgressSummary {
   missions_completed: number;
@@ -75,22 +75,7 @@ const Profile = () => {
     'E'
   ).toUpperCase();
 
-  const avatarPath = profile?.avatar || '';
-  let avatarSrc: string | null = null;
-
-  if (avatarPath) {
-    const lower = avatarPath.toLowerCase();
-    const isDefault = lower.includes('default');
-    if (!isDefault) {
-      if (avatarPath.startsWith('http')) {
-        avatarSrc = avatarPath;
-      } else if (avatarPath.startsWith('/')) {
-        avatarSrc = buildApiUrl(avatarPath);
-      } else {
-        avatarSrc = buildApiUrl(`/media/${avatarPath}`);
-      }
-    }
-  }
+  const avatarSrc = resolveAvatarUrl(profile?.avatar);
 
   const handleAvatarSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     setUploadError(null);
@@ -115,8 +100,8 @@ const Profile = () => {
     try {
       const formData = new FormData();
       formData.append('avatar', avatarFile);
-      await authFetch('/api/profil/', {
-        method: 'PUT',
+      await authFetch('/api/profil/avatar/', {
+        method: 'POST',
         body: formData,
       });
       await refreshProfile();

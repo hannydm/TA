@@ -1,0 +1,49 @@
+services:
+  backend:
+    image: carlomuzaqi/ta-backend:latest
+    build:
+      context: .
+      dockerfile: BE/final project/Dockerfile
+    container_name: digi_backend
+    env_file:
+      - "BE/final project/.env"
+    environment:
+      # Override host saat berjalan di dalam Docker
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+    ports:
+      - "8000:8000"
+    volumes:
+      - "./BE/final project/media:/app/media"
+    depends_on:
+      - mysql
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: digi_mysql
+    env_file:
+      - "BE/final project/.env"
+    environment:
+      # Root password terpisah; tidak dipakai Django, hanya untuk admin DB.
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+
+  frontend:
+    image: carlomuzaqi/ta-frontend:latest
+    build:
+      context: FE/finalProject
+      dockerfile: Dockerfile
+    container_name: digi_frontend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

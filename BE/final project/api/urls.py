@@ -5,6 +5,7 @@ urlpatterns = [
     # Contoh endpoint "Hello World" untuk tes
     path('hello/', views.hello_world, name='hello_world'),
     path('profil/', views.profil_view, name='profil'),
+    path('profil/avatar/', views.profil_avatar_upload_view, name='profil-avatar'),
     path('registrasi/', views.registrasi_view, name='registrasi'),
     path('modul/', views.daftar_modul_view, name='daftar-modul'),
     path('modul/<int:modul_id>/', views.detail_modul_view, name='detail-modul'),

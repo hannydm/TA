@@ -15,8 +15,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include, re_path  # <--- Tambahkan re_path
-from django.views.generic import TemplateView   # <--- Tambahkan TemplateView
+from django.urls import path, include
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
@@ -34,6 +33,17 @@ def favicon_view(_: object) -> HttpResponse:
   return HttpResponse(status=204)
 
 
+def root_view(_: object) -> HttpResponse:
+  """
+  Sederhana: hindari TemplateDoesNotExist untuk index.html.
+  Frontend React dilayani melalui container terpisah di port 8080.
+  """
+  return HttpResponse(
+      "Django backend running. Frontend available at / on port 8080.",
+      content_type="text/plain",
+  )
+
+
 urlpatterns = [
     # 1. Admin dan API Routes (Biarkan di atas)
     path('admin/', admin.site.urls),
@@ -48,9 +58,7 @@ if settings.DEBUG:
     # Serve uploaded media files (e.g. profile images) in development
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-# 2. React Frontend Integration (WAJIB DI PALING BAWAH)
-# Pola ini menangkap URL apa saja yang tidak dikenali di atas
-# dan mengirimkannya ke index.html milik React
 urlpatterns += [
-    re_path(r'^.*$', TemplateView.as_view(template_name='index.html')),
+    # Halaman root sederhana untuk health-check.
+    path('', root_view),
 ]

@@ -2,7 +2,17 @@ const computeDefaultBase = () => {
   if (typeof window === 'undefined') {
     return 'http://127.0.0.1:8000';
   }
-  const { protocol, hostname } = window.location;
+
+  const { protocol, hostname, port } = window.location;
+
+  // Untuk domain produksi, gunakan origin yang sama persis dengan halaman
+  // (tanpa mengganti ke IP), supaya IP publik tidak tampil di Network tab
+  // dan supaya tidak terkena masalah mixed-content atau sertifikat.
+  if (hostname === 'digiworld.biz.id') {
+    const effectivePort = port ? `:${port}` : '';
+    return `${protocol}//${hostname}${effectivePort}`;
+  }
+
   const defaultPort = '8000';
   return `${protocol}//${hostname}:${defaultPort}`;
 };
@@ -19,6 +29,74 @@ export const buildApiUrl = (path: string) => {
     return path;
   }
   return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+};
+
+/**
+ * Normalisasi URL avatar dari backend supaya:
+ * - Tidak memakai avatar default bawaan (`default.jpg` dkk)
+ * - Untuk domain produksi, SELALU memakai hostname domain (bukan IP)
+ *   dan protokol yang sama dengan halaman (https), sehingga:
+ *   - IP publik backend tidak kelihatan di Network tab
+ *   - Tidak terjadi mixed‑content (https halaman vs http avatar).
+ */
+export const resolveAvatarUrl = (
+  avatarPath: string | null | undefined,
+): string | null => {
+  if (!avatarPath) return null;
+
+  const raw = String(avatarPath).trim();
+  if (!raw) return null;
+
+  const lower = raw.toLowerCase();
+  const filename = lower.split('/').pop() || lower;
+
+  // Abaikan placeholder default
+  if (
+    filename === 'default.jpg' ||
+    filename === 'default.jpeg' ||
+    filename === 'default.png'
+  ) {
+    return null;
+  }
+
+  const isBrowser = typeof window !== 'undefined';
+
+  // Origin backend yang akan dipakai untuk avatar.
+  // - Di dev / lokal: API_BASE_URL sudah menunjuk ke backend (host:8000).
+  // - Di produksi (digiworld.biz.id): pakai hostname domain + port backend 8000
+  //   agar IP publik backend tidak terekspos dan tetap lewat reverse proxy.
+  const backendOrigin = (() => {
+    if (!isBrowser) return API_BASE_URL;
+    const { protocol, hostname } = window.location;
+
+    if (hostname === 'digiworld.biz.id') {
+      const backendPort = '8000';
+      return `${protocol}//${hostname}:${backendPort}`;
+    }
+
+    return API_BASE_URL;
+  })();
+
+  // 1) Jika backend mengirim URL absolut (dengan IP atau host apa pun),
+  //    pakai hanya path‑nya lalu gabungkan dengan backendOrigin.
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    if (!isBrowser) return raw;
+    try {
+      const url = new URL(raw);
+      const path = url.pathname + url.search;
+      return `${backendOrigin}${path}`;
+    } catch {
+      return raw;
+    }
+  }
+
+  // 2) Path relatif/absolut:
+  //    - Jika sudah diawali '/', gunakan apa adanya.
+  //    - Jika hanya nama file, anggap berada di /media/<file>.
+  const path = raw.startsWith('/') ? raw : `/media/${raw}`;
+
+  // Di semua lingkungan, gabungkan dengan backendOrigin.
+  return `${backendOrigin}${path}`;
 };
 
 export const parseJson = async (response: Response) => {

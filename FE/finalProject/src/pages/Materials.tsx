@@ -184,6 +184,7 @@ const Materials = () => {
   const [moduleTitle, setModuleTitle] = useState('');
   const [levelUpToast, setLevelUpToast] = useState<number | null>(null);
   const [badgeToast, setBadgeToast] = useState<string | null>(null);
+  const [completingMaterialId, setCompletingMaterialId] = useState<string | null>(null);
 
   // State for Live Code
   const [userCode, setUserCode] = useState('');
@@ -267,11 +268,12 @@ const Materials = () => {
   }, [selectedMaterial]);
 
   const handleMarkComplete = async (materialId: string, stayOnPage: boolean = false) => {
-    const material = materials.find((m) => m.id === materialId);
-    if (!material || material.status === 'completed') return;
+      const material = materials.find((m) => m.id === materialId);
+      if (!material || material.status === 'completed' || completingMaterialId === materialId) return;
 
-    try {
-      let submitResult: any = null;
+      try {
+        setCompletingMaterialId(materialId);
+        let submitResult: any = null;
       // If it has an activity, submit score
       if (material.aktivitasId && material.xpReward > 0) {
         submitResult = await authFetch('/api/submit-skor/', {
@@ -313,13 +315,15 @@ const Materials = () => {
         setSelectedMaterial(null);
       }
 
-      if (refreshProfile) {
-        await refreshProfile();
+        if (refreshProfile) {
+          await refreshProfile();
+        }
+      } catch (error) {
+        console.error('Failed to mark complete', error);
+      } finally {
+        setCompletingMaterialId((current) => (current === materialId ? null : current));
       }
-    } catch (error) {
-      console.error('Failed to mark complete', error);
-    }
-  };
+    };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -357,13 +361,14 @@ const Materials = () => {
             </button>
 
             {material.status !== 'completed' && material.activityType !== 'DEMO_HTML' && material.activityType !== 'PUZZLE_CODE' && (
-              <button
-                onClick={() => handleMarkComplete(material.id)}
-                className="btn-neon px-6 py-2 flex items-center space-x-2"
-              >
-                <CheckCircle className="w-4 h-4" />
-                <span>Mark as Completed (+{material.xpReward} XP)</span>
-              </button>
+                <button
+                  onClick={() => handleMarkComplete(material.id)}
+                  disabled={material.status === 'completed' || completingMaterialId === material.id}
+                  className="btn-neon px-6 py-2 flex items-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Mark as Completed (+{material.xpReward} XP)</span>
+                </button>
             )}
           </div>
 
@@ -414,30 +419,42 @@ const Materials = () => {
                     <button
                       onClick={() => {
                         // Simple C Simulation
-                        let output = "";
-                        const validation = material.activityValidation || "";
+                        let output = '';
+                        const validation = material.activityValidation || '';
 
-                        // Check if code seems to be C
-                        if (!userCode.includes("main") || !userCode.includes("{") || !userCode.includes("}")) {
-                          output = "Error: Invalid C code structure. Ensure you have a main function.";
+                        // Check if code seems to be C-ish
+                        if (
+                          !userCode.includes('main') ||
+                          !userCode.includes('{') ||
+                          !userCode.includes('}')
+                        ) {
+                          output =
+                            'Error: Invalid C code structure. Ensure you have a main function.';
+                        } else if (validation) {
+                          // Normalise whitespace so guru bisa menulis validasi
+                          // dalam satu baris, sementara siswa boleh pakai enter / spasi.
+                          const normalizedUser = userCode.replace(/\s+/g, '');
+                          const normalizedValidation = validation.replace(/\s+/g, '');
+
+                          if (!normalizedUser.includes(normalizedValidation)) {
+                            output = `Error: Code must contain "${validation}"`;
+                          }
                         }
-                        // Check validation string
-                        else if (validation && !userCode.includes(validation)) {
-                          output = `Error: Code must contain "${validation}"`;
-                        } else {
+
+                        if (!output) {
                           // Simulate success output
-                          // Extract what's inside printf if possible, or just show success message
-                          const printfMatch = userCode.match(/printf\s*\\(\\s*"([^"]+)"\\s*\\)/);
+                          // Extract what's inside printf if possible, otherwise generic message.
+                          const printfMatch = userCode.match(
+                            /printf\s*\(\s*"([^"]+)"\s*\)/
+                          );
                           if (printfMatch) {
                             output = printfMatch[1];
                           } else {
-                            output = "Program executed successfully.";
+                            output = 'Program executed successfully.';
                           }
-                          output += "\n\n[Process completed with exit code 0]";
-
-                          // Success: biarkan pengguna tetap di halaman,
-                          // mereka bisa menandai selesai secara manual.
+                          output += '\n\n[Process completed with exit code 0]';
                         }
+
                         setCodeOutput(output);
                       }}
                       className="btn-neon px-4 py-2 self-end text-sm"
@@ -494,13 +511,14 @@ const Materials = () => {
                   <h3 className="text-lg font-semibold text-foreground mb-2">
                     Selesai dengan materi dan aktivitas?
                   </h3>
-                  <button
-                    onClick={() => handleMarkComplete(material.id)}
-                    className="btn-neon px-8 py-3 flex items-center space-x-2 mx-auto"
-                  >
-                    <Zap className="w-5 h-5" />
-                    <span>Complete & Gain {material.xpReward} XP</span>
-                  </button>
+                    <button
+                      onClick={() => handleMarkComplete(material.id)}
+                      disabled={material.status === 'completed' || completingMaterialId === material.id}
+                      className="btn-neon px-8 py-3 flex items-center space-x-2 mx-auto disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <Zap className="w-5 h-5" />
+                      <span>Complete & Gain {material.xpReward} XP</span>
+                    </button>
                 </div>
               </div>
             )}

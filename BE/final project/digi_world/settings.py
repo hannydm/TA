@@ -34,6 +34,9 @@ ALLOWED_HOSTS = [
     "0.0.0.0",
     "127.0.0.1",
     "192.168.0.101",
+    "31.56.56.8",
+    # Domain publik untuk aplikasi ini.
+    "digiworld.biz.id",
 ]
 
 # Application definition
@@ -126,10 +129,13 @@ USE_TZ = True
 # PERUBAHAN 2: Menyesuaikan dengan output Vite (folder assets)
 STATIC_URL = 'assets/'
 
-# Mengarahkan Django untuk mengambil file statis dari hasil build Vite
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, '../../FE/finalProject/dist/assets'),
-]
+# Mengarahkan Django untuk mengambil file statis dari hasil build Vite,
+# hanya jika folder build benar-benar ada (hindari warning W004).
+vite_assets_dir = BASE_DIR / '../../FE/finalProject/dist/assets'
+if vite_assets_dir.exists():
+    STATICFILES_DIRS = [str(vite_assets_dir)]
+else:
+    STATICFILES_DIRS = []
 
 # Media files (uploaded user content, e.g. avatar)
 MEDIA_URL = '/media/'
@@ -155,4 +161,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://192.168.0.101:8080",
     "http://192.168.100.34:8080",
+    "http://31.56.56.8:8080",
+    # Frontend saat diakses melalui domain.
+    "http://digiworld.biz.id",
+    "https://digiworld.biz.id",
 ]

@@ -3,7 +3,7 @@ import { User, Rocket, BookOpen, Trophy, LogOut, Zap, Menu, X, GraduationCap } f
 import { useEffect, useState } from 'react';
 import { gameState, User as UserType } from '@/lib/gameState';
 import { useAuth } from '@/hooks/useAuth';
-import { buildApiUrl } from '@/lib/api';
+import { buildApiUrl, resolveAvatarUrl } from '@/lib/api';
 
 const GameLayout = () => {
   const navigate = useNavigate();
@@ -47,22 +47,7 @@ const GameLayout = () => {
     'E'
   ).toUpperCase();
 
-  const avatarPath = profile.avatar || '';
-  let avatarSrc: string | null = null;
-
-  if (avatarPath) {
-    const lower = avatarPath.toLowerCase();
-    const isDefault = lower.includes('default');
-    if (!isDefault) {
-      if (avatarPath.startsWith('http')) {
-        avatarSrc = avatarPath;
-      } else if (avatarPath.startsWith('/')) {
-        avatarSrc = buildApiUrl(avatarPath);
-      } else {
-        avatarSrc = buildApiUrl(`/media/${avatarPath}`);
-      }
-    }
-  }
+  const avatarSrc = resolveAvatarUrl(profile.avatar);
 
   const isTeacher = !!profile.user?.is_staff;
 

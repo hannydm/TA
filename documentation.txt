@@ -69,8 +69,111 @@ Key behavior:
   - Request JSON: `{ "refresh": "<refresh_token>" }`
   - Response: new `access` token.
 
-- Default permissions:
+  - Default permissions:
   - `REST_FRAMEWORK` is configured so that endpoints require JWT authentication by default (`IsAuthenticated`) unless explicitly opened with `AllowAny`.
+
+
+8. Deployment with Docker
+-------------------------
+
+This project includes Docker support so you can run backend (Django) and frontend (React/Vite build) as containers.
+
+8.1 Prerequisites
+-----------------
+
+- Docker Engine (Linux server or Docker Desktop)
+- Docker Compose v2 (`docker compose` command)
+
+Optional but recommended:
+- A domain name that points to your server (so you can set `VITE_API_BASE_URL` correctly when building the frontend).
+
+8.2 Files related to Docker
+---------------------------
+
+- `BE/final project/Dockerfile`
+  - Builds a Python image for the Django backend.
+  - Installs backend dependencies from `requirements.txt`.
+  - Runs `python manage.py runserver 0.0.0.0:8000` inside the container.
+- `FE/finalProject/Dockerfile`
+  - Builds the React/Vite app (`npm run build`).
+  - Serves the built `dist/` directory using `serve` on port `8080`.
+- `docker-compose.yml`
+  - Defines two services:
+    - `backend` – Django API on port `8000`
+    - `frontend` – static React app on port `8080`
+  - Mounts backend `db.sqlite3` and `media/` as volumes so data persists.
+
+8.3 Configuring API URL for frontend
+------------------------------------
+
+The React app talks to the backend using `VITE_API_BASE_URL` (defined in `FE/finalProject/.env`).
+
+- For **local Docker** on the same machine:
+  - Set in `FE/finalProject/.env`:
+    - `VITE_API_BASE_URL=http://localhost:8000`
+- For **deployment on a remote server** (e.g. `https://example.com`):
+  - If you expose backend directly on port 8000:
+    - `VITE_API_BASE_URL=http://YOUR_SERVER_IP:8000`
+  - If you later place backend behind a reverse proxy (nginx) under a path or domain,
+    adjust this value to match the public URL of the Django API.
+
+After updating `.env`, the frontend image must be rebuilt so the new value is baked into the bundle.
+
+8.4 Building and running with Docker Compose
+--------------------------------------------
+
+From the project root (`TA/`):
+
+1. **Build images and start containers**:
+
+   - `docker compose up --build -d`
+
+   This will:
+   - Build backend image from `BE/final project/Dockerfile`
+   - Build frontend image from `FE/finalProject/Dockerfile`
+   - Start both containers in the background:
+     - Backend: `http://localhost:8000`
+     - Frontend: `http://localhost:8080`
+
+2. **Check container status**:
+
+   - `docker compose ps`
+
+3. **View logs** (optional):
+
+   - All services: `docker compose logs -f`
+   - Only backend: `docker compose logs -f backend`
+   - Only frontend: `docker compose logs -f frontend`
+
+4. **Stop containers**:
+
+   - `docker compose down`
+
+   This keeps database (`db.sqlite3`) and uploaded files (`media/`) on the host because they are mounted as volumes.
+
+8.5 Persistence and volumes
+---------------------------
+
+In `docker-compose.yml` the backend mounts:
+
+- `./BE/final project/db.sqlite3:/app/db.sqlite3`
+- `./BE/final project/media:/app/media`
+
+This means:
+- Your local `db.sqlite3` and `media/` folders contain the real data.
+- Removing containers with `docker compose down` **does not delete** user data or uploaded files.
+
+8.6 Typical deployment flow on a server
+---------------------------------------
+
+1. Clone this repository to the server.
+2. Ensure `FE/finalProject/.env` has `VITE_API_BASE_URL` pointing to the backend URL that users will access.
+3. Run `docker compose up --build -d`.
+4. Open:
+   - `http://SERVER_IP:8080` for the frontend.
+   - `http://SERVER_IP:8000/api/hello/` (or similar) to quickly test the backend.
+
+Later you can place nginx or another reverse proxy in front of these ports if needed (for HTTPS, domain routing, etc.), but the containers themselves will tetap berjalan dengan cara yang sama.
 
 
 2.2 Profile & Game State

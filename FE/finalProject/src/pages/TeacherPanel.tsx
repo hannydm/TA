@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { BookOpen, PlusCircle, Users, CheckCircle, ClipboardList, AlertTriangle } from 'lucide-react';
+import { resolveAvatarUrl } from '@/lib/api';
 
 interface TeacherStudent {
   id: number;
@@ -287,16 +288,28 @@ const TeacherPanel = () => {
     e.preventDefault();
     setError(null);
     try {
+      const payload: NewModuleForm = {
+        judul: newModule.judul,
+        deskripsi: newModule.deskripsi,
+      };
+      if (newModule.urutan != null) {
+        payload.urutan = newModule.urutan;
+      }
+
       if (editingModuleId) {
+        // Gunakan POST ke endpoint update modul.
+        // Backend (`teacher_update_module_view`) sekarang menerima
+        // POST maupun PUT, sehingga kita tidak bergantung pada
+        // dukungan method PUT di server / proxy.
         await authFetch(`/api/teacher/modules/${editingModuleId}/`, {
-          method: 'PUT',
-          body: JSON.stringify(newModule),
+          method: 'POST',
+          body: JSON.stringify(payload),
         });
         alert('Modul berhasil diperbarui.');
       } else {
         await authFetch('/api/teacher/modules/', {
           method: 'POST',
-          body: JSON.stringify(newModule),
+          body: JSON.stringify(payload),
         });
         alert('Modul berhasil dibuat.');
       }
@@ -307,8 +320,16 @@ const TeacherPanel = () => {
       const modulesData = await authFetch<TeacherModule[]>('/api/teacher/modules/');
       if (Array.isArray(modulesData)) setModules(modulesData);
     } catch (e: any) {
-      console.error('Failed to create module', e);
-      setError('Gagal membuat modul. Periksa input dan coba lagi.');
+      console.error('Failed to create/update module', e);
+      const backendMessage =
+        typeof e?.payload === 'object' && e?.payload !== null && 'error' in e.payload
+          ? (e.payload as any).error
+          : e?.message;
+      setError(
+        backendMessage
+          ? `Gagal menyimpan modul: ${backendMessage}`
+          : 'Gagal menyimpan modul. Periksa input dan coba lagi.'
+      );
     }
   };
 
@@ -317,13 +338,17 @@ const TeacherPanel = () => {
     setError(null);
     try {
       const selectedModuleId = newMaterial.modul_id;
+      const payload = {
+        judul: newMaterial.judul,
+        konten_narasi: newMaterial.konten_narasi,
+      };
+
       if (editingMaterialId) {
+        // Sama seperti modul, kita gunakan POST untuk update materi
+        // agar tidak bergantung pada dukungan HTTP PUT di proxy.
         await authFetch(`/api/teacher/materials/${editingMaterialId}/`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            judul: newMaterial.judul,
-            konten_narasi: newMaterial.konten_narasi,
-          }),
+          method: 'POST',
+          body: JSON.stringify(payload),
         });
         alert('Materi berhasil diperbarui.');
       } else {
@@ -343,8 +368,16 @@ const TeacherPanel = () => {
         handleMaterialModuleChange(selectedModuleId);
       }
     } catch (e: any) {
-      console.error('Failed to create material', e);
-      setError('Gagal membuat materi. Periksa input dan coba lagi.');
+      console.error('Failed to create/update material', e);
+      const backendMessage =
+        typeof e?.payload === 'object' && e?.payload !== null && 'error' in e.payload
+          ? (e.payload as any).error
+          : e?.message;
+      setError(
+        backendMessage
+          ? `Gagal menyimpan materi: ${backendMessage}`
+          : 'Gagal menyimpan materi. Periksa input dan coba lagi.'
+      );
     }
   };
 
@@ -679,8 +712,9 @@ const TeacherPanel = () => {
       }
 
       if (badgeEditingId) {
+        // Gunakan POST untuk update badge agar aman di belakang proxy.
         await authFetch(`/api/teacher/badges/${badgeEditingId}/`, {
-          method: 'PUT',
+          method: 'POST',
           body: JSON.stringify(payload),
         });
         alert('Badge berhasil diperbarui.');
@@ -807,17 +841,20 @@ const TeacherPanel = () => {
                             onClick={() => loadStudentDetail(s)}
                             className="flex items-center space-x-2 text-left w-full hover:text-neon-cyan transition-colors"
                           >
-                            {s.avatar ? (
-                              <img
-                                src={s.avatar}
-                                alt={s.full_name}
-                                className="w-7 h-7 rounded-full object-cover border border-border/60"
-                              />
-                            ) : (
-                              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-neon-cyan/20 to-neon-magenta/20 flex items-center justify-center text-xs font-bold">
-                                {s.full_name.charAt(0).toUpperCase()}
-                              </div>
-                            )}
+                            {(() => {
+                              const url = resolveAvatarUrl(s.avatar);
+                              return url ? (
+                                <img
+                                  src={url}
+                                  alt={s.full_name}
+                                  className="w-7 h-7 rounded-full object-cover border border-border/60"
+                                />
+                              ) : (
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-neon-cyan/20 to-neon-magenta/20 flex items-center justify-center text-xs font-bold">
+                                  {s.full_name.charAt(0).toUpperCase()}
+                                </div>
+                              );
+                            })()}
                             <span className="font-medium text-foreground truncate">
                               {s.full_name}
                             </span>
@@ -1539,17 +1576,20 @@ const TeacherPanel = () => {
                 {/* Ringkasan profil & statistik */}
                 <div className="space-y-3">
                   <div className="flex items-center space-x-3 p-3 rounded-lg bg-surface/40 border border-border/60">
-                    {studentDetail.avatar ? (
-                      <img
-                        src={studentDetail.avatar}
-                        alt={studentDetail.full_name}
-                        className="w-10 h-10 rounded-full object-cover border border-border/60"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neon-cyan/20 to-neon-magenta/20 flex items-center justify-center text-sm font-bold">
-                        {studentDetail.full_name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    {(() => {
+                      const url = resolveAvatarUrl(studentDetail.avatar);
+                      return url ? (
+                        <img
+                          src={url}
+                          alt={studentDetail.full_name}
+                          className="w-10 h-10 rounded-full object-cover border border-border/60"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neon-cyan/20 to-neon-magenta/20 flex items-center justify-center text-sm font-bold">
+                          {studentDetail.full_name.charAt(0).toUpperCase()}
+                        </div>
+                      );
+                    })()}
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">
                         {studentDetail.full_name}

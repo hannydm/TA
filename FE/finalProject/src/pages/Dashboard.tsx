@@ -4,7 +4,7 @@ import { gameState, User } from '@/lib/gameState';
 import XPToast from '@/components/XPToast';
 import LevelUpModal from '@/components/LevelUpModal';
 import { useAuth } from '@/hooks/useAuth';
-import { buildApiUrl } from '@/lib/api';
+import { buildApiUrl, resolveAvatarUrl } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 
 interface DashboardStats {
@@ -33,6 +33,7 @@ interface ProgressSummary {
   badges_earned: number;
   level: number;
   total_poin: number;
+  xp_today: number;
 }
 
 const Dashboard = () => {
@@ -104,22 +105,7 @@ const Dashboard = () => {
     'E'
   ).toUpperCase();
 
-  const avatarPath = profile?.avatar || '';
-  let avatarSrc: string | null = null;
-
-  if (avatarPath) {
-    const lower = avatarPath.toLowerCase();
-    const isDefault = lower.includes('default');
-    if (!isDefault) {
-      if (avatarPath.startsWith('http')) {
-        avatarSrc = avatarPath;
-      } else if (avatarPath.startsWith('/')) {
-        avatarSrc = buildApiUrl(avatarPath);
-      } else {
-        avatarSrc = buildApiUrl(`/media/${avatarPath}`);
-      }
-    }
-  }
+  const avatarSrc = resolveAvatarUrl(profile?.avatar);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -176,7 +162,9 @@ const Dashboard = () => {
                   <Zap className="w-5 h-5 text-neon-magenta" />
                   <span className="text-sm">XP Today</span>
                 </div>
-                <span className="font-bold text-neon-magenta">{stats.xp_today}</span>
+                <span className="font-bold text-neon-magenta">
+                  {progress?.xp_today ?? 0}
+                </span>
               </div>
             </div>
 
@@ -323,15 +311,18 @@ const Dashboard = () => {
                       </div>
 
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-lg bg-surface overflow-hidden">
-                        {player.avatar ? (
-                          <img
-                            src={player.avatar.startsWith('http') ? player.avatar : buildApiUrl(player.avatar.startsWith('/') ? player.avatar : `/media/${player.avatar}`)}
-                            alt={player.user.username}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span>{player.user.username.charAt(0).toUpperCase()}</span>
-                        )}
+                        {(() => {
+                          const url = resolveAvatarUrl(player.avatar);
+                          return url ? (
+                            <img
+                              src={url}
+                              alt={player.user.username}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span>{player.user.username.charAt(0).toUpperCase()}</span>
+                          );
+                        })()}
                       </div>
 
                       <div className="flex-1 min-w-0">

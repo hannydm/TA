@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Brain, Clock, CheckCircle, X, Zap, Trophy, ArrowRight, Volume2, VolumeX } from 'lucide-react';
-import { quizQuestions } from '@/lib/gameState';
 import XPToast from '@/components/XPToast';
 import NotificationToast from '@/components/NotificationToast';
 import { useAuth } from '@/hooks/useAuth';
@@ -134,36 +133,15 @@ const Quiz = () => {
     }
   }, [searchParams, apiQuizzes, selectedQuiz]);
 
-  const quizList = apiQuizzes.length
-    ? apiQuizzes.map((q, index) => ({
-      id: String(q.id),
-      title: `Quiz ${index + 1}`,
-      description: q.instruksi || 'Quiz from admin',
-      questions: q.soal_pilgan.length,
-      difficulty: 'Custom',
-      timeLimit: `${q.soal_pilgan.length} minutes`,
-      xpReward: q.poin || 20,
-    }))
-    : [
-      {
-        id: '1',
-        title: 'Introduction to Programming',
-        description: 'Test your understanding of basic programming concepts',
-        questions: quizQuestions['1']?.length || 0,
-        difficulty: 'Beginner',
-        timeLimit: `${quizQuestions['1']?.length || 5} minutes`,
-        xpReward: 20,
-      },
-      {
-        id: '2',
-        title: 'Data Structures',
-        description: 'Challenge yourself with data structure fundamentals',
-        questions: quizQuestions['2']?.length || 0,
-        difficulty: 'Intermediate',
-        timeLimit: `${quizQuestions['2']?.length || 5} minutes`,
-        xpReward: 30,
-      },
-    ];
+  const quizList = apiQuizzes.map((q, index) => ({
+    id: String(q.id),
+    title: `Quiz ${index + 1}`,
+    description: q.instruksi || 'Quiz from admin',
+    questions: q.soal_pilgan.length,
+    difficulty: 'Custom',
+    timeLimit: `${q.soal_pilgan.length || 1} minutes`,
+    xpReward: q.poin || 20,
+  }));
 
   const currentQuiz = quizList.find((q) => q.id === selectedQuiz);
 
@@ -181,9 +159,7 @@ const Quiz = () => {
           ),
         }));
       })()
-      : selectedQuiz
-        ? quizQuestions[selectedQuiz as keyof typeof quizQuestions] || []
-        : [];
+      : [];
 
   // Timer Logic
   useEffect(() => {
@@ -237,8 +213,6 @@ const Quiz = () => {
     if (apiQuizzes.length > 0) {
       const apiQuiz = apiQuizzes.find(q => String(q.id) === quizId);
       questionCount = apiQuiz ? apiQuiz.soal_pilgan.length : 0;
-    } else {
-      questionCount = quizQuestions[quizId as keyof typeof quizQuestions]?.length || 0;
     }
 
     const calculatedTime = questionCount * 60; // 60 seconds per question
@@ -282,10 +256,11 @@ const Quiz = () => {
   };
 
   const handleSubmitQuiz = async () => {
-    // Calculate score based on points per question
-    // Total points for the quiz (e.g. 20 XP or from API)
+    // Hitung XP berdasarkan jumlah jawaban benar.
+    // Contoh: 10 pertanyaan, 20 XP -> 1 soal = 2 XP.
     const totalQuizPoints = currentQuiz?.xpReward || 20;
-    const pointsPerQuestion = questions.length > 0 ? totalQuizPoints / questions.length : 0;
+    const pointsPerQuestion =
+      questions.length > 0 ? totalQuizPoints / questions.length : 0;
 
     let calculatedScore = 0;
     let correctCount = 0;
@@ -295,22 +270,19 @@ const Quiz = () => {
         calculatedScore += pointsPerQuestion;
         correctCount++;
       }
-      // Wrong answer = 0 points for that question (already handled by not adding)
     });
 
-    // Round to nearest integer
-    const finalScore = Math.round(calculatedScore);
-    const percentage = questions.length ? (correctCount / questions.length) * 100 : 0;
+    // Bulatkan ke integer terdekat dan batasi maksimum ke totalQuizPoints.
+    const finalScore = Math.min(
+      totalQuizPoints,
+      Math.max(0, Math.round(calculatedScore)),
+    );
 
-    // Bonus XP for high scores (only if not 0)
-    let bonusXP = 0;
-    if (percentage >= 80 && finalScore > 0) {
-      bonusXP = 30;
-    }
-
-    const totalXPGained = finalScore + bonusXP;
-
-    setQuizState(prev => ({ ...prev, score: correctCount, showResults: true }));
+    setQuizState((prev) => ({
+      ...prev,
+      score: correctCount,
+      showResults: true,
+    }));
 
     if (selectedQuiz) {
       saveQuizHistory(selectedQuiz, {
@@ -318,19 +290,22 @@ const Quiz = () => {
         score: correctCount,
       });
     }
-    setShowXPToast(totalXPGained);
+
+    // Tampilkan jumlah XP yang benar‑benar didapat dari quiz ini.
+    setShowXPToast(finalScore);
 
     // Jika quiz berasal dari backend, simpan hasil ke backend.
     if (selectedQuiz && apiQuizzes.length) {
       const apiQuiz = apiQuizzes.find((q) => String(q.id) === selectedQuiz);
       if (apiQuiz) {
         try {
-          // Simpan skor sebagai XP ke HasilAktivitas
+          // Kirim skor ke backend; backend hanya menambah selisih
+          // dibanding skor terbaik sebelumnya untuk aktivitas ini.
           const response = await authFetch<any>('/api/submit-skor/', {
             method: 'POST',
             body: JSON.stringify({
               aktivitas_id: apiQuiz.id,
-              skor: totalXPGained,
+              skor: finalScore,
             }),
           });
 
