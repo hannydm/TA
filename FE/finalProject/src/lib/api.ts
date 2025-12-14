@@ -42,7 +42,9 @@ export const buildApiUrl = (path: string) => {
 export const resolveAvatarUrl = (
   avatarPath: string | null | undefined,
 ): string | null => {
-  if (!avatarPath) return null;
+  if (!avatarPath) {
+    return null;
+  }
 
   const raw = String(avatarPath).trim();
   if (!raw) return null;
@@ -59,33 +61,16 @@ export const resolveAvatarUrl = (
     return null;
   }
 
-  const isBrowser = typeof window !== 'undefined';
-
-  // Origin backend yang akan dipakai untuk avatar.
-  // - Di dev / lokal: API_BASE_URL sudah menunjuk ke backend (host:8000).
-  // - Di produksi (digiworld.biz.id): pakai hostname domain + port backend 8000
-  //   agar IP publik backend tidak terekspos dan tetap lewat reverse proxy.
-  const backendOrigin = (() => {
-    if (!isBrowser) return API_BASE_URL;
-    const { protocol, hostname } = window.location;
-
-    if (hostname === 'digiworld.biz.id') {
-      const backendPort = '8000';
-      return `${protocol}//${hostname}:${backendPort}`;
-    }
-
-    return API_BASE_URL;
-  })();
-
   // 1) Jika backend mengirim URL absolut (dengan IP atau host apa pun),
-  //    pakai hanya path‑nya lalu gabungkan dengan backendOrigin.
+  //    ambil hanya path‑nya lalu gabungkan dengan API_BASE_URL lewat buildApiUrl,
+  //    supaya origin selalu sama dengan API (tidak terlihat IP).
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
-    if (!isBrowser) return raw;
     try {
       const url = new URL(raw);
       const path = url.pathname + url.search;
-      return `${backendOrigin}${path}`;
+      return buildApiUrl(path);
     } catch {
+      // Jika parsing gagal, kembalikan apa adanya (kasus langka).
       return raw;
     }
   }
@@ -95,8 +80,9 @@ export const resolveAvatarUrl = (
   //    - Jika hanya nama file, anggap berada di /media/<file>.
   const path = raw.startsWith('/') ? raw : `/media/${raw}`;
 
-  // Di semua lingkungan, gabungkan dengan backendOrigin.
-  return `${backendOrigin}${path}`;
+  // Di semua lingkungan, gabungkan dengan API_BASE_URL (yang sudah
+  // disesuaikan dengan domain / IP masing‑masing).
+  return buildApiUrl(path);
 };
 
 export const parseJson = async (response: Response) => {

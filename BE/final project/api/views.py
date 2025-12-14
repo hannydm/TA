@@ -5,11 +5,14 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework import status
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Sum, Max
+from django.urls import reverse
+import mimetypes
 
 from .serializers import (
     RegisterSerializer,
@@ -70,7 +73,42 @@ def registrasi_view(request):
 def profil_view(request):
     # request.user selalu user dari token JWT
     profil, _ = ProfilSiswa.objects.get_or_create(user=request.user)
-    serializer = ProfilSiswaSerializer(profil, many=False)
+    serializer = ProfilSiswaSerializer(profil, many=False, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def profil_update_view(request):
+    """
+    Update field sederhana pada profil siswa yang bisa diedit sendiri,
+    saat ini: NISN dan kelas.
+
+    Body (JSON):
+      - nisn  : string (opsional)
+      - kelas : string (opsional)
+
+    Jika dikirim string kosong, nilai akan di-set ke NULL.
+    """
+    profil, _ = ProfilSiswa.objects.get_or_create(user=request.user)
+
+    nisn = request.data.get('nisn', None)
+    kelas = request.data.get('kelas', None)
+
+    changed = False
+
+    if nisn is not None:
+        profil.nisn = (str(nisn).strip() or None)
+        changed = True
+
+    if kelas is not None:
+        profil.kelas = (str(kelas).strip() or None)
+        changed = True
+
+    if changed:
+        profil.save()
+
+    serializer = ProfilSiswaSerializer(profil, many=False, context={'request': request})
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -95,6 +133,34 @@ def profil_avatar_upload_view(request):
 
     serializer = ProfilSiswaSerializer(profil, many=False)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def profil_avatar_public_view(request, profil_id: int):
+    """
+    Endpoint publik untuk mengambil file avatar siswa.
+    Tidak memakai autentikasi supaya bisa dipakai langsung di <img src="...">.
+    """
+    profil = get_object_or_404(ProfilSiswa, id=profil_id)
+
+    if not profil.avatar or not profil.avatar.name:
+        raise Http404("Avatar tidak ditemukan")
+
+    filename = profil.avatar.name.lower().split('/')[-1]
+    if filename in {'default.jpg', 'default.jpeg', 'default.png'}:
+        # Placeholder default tidak mempunyai file fisik yang perlu dikirim.
+        raise Http404("Avatar tidak ditemukan")
+
+    try:
+        file_handle = profil.avatar.open('rb')
+    except Exception:
+        raise Http404("Avatar tidak dapat dibuka")
+
+    mime_type, _ = mimetypes.guess_type(profil.avatar.name)
+    response = FileResponse(file_handle, content_type=mime_type or 'image/jpeg')
+    response['Content-Length'] = profil.avatar.size
+    return response
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -395,7 +461,7 @@ def leaderboard_view(request):
         )
         
         # 2. Serialisasi data (many=True karena ini adalah daftar)
-        serializer = ProfilSiswaSerializer(leaderboard_data, many=True)
+        serializer = ProfilSiswaSerializer(leaderboard_data, many=True, context={'request': request})
         
         # 3. Kirim respons
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -412,29 +478,27 @@ def leaderboard_view(request):
 def leaderboard_weekly_view(request):
     """
     Mengirimkan 10 pengguna dengan total XP TERTINGGI dalam 7 hari terakhir.
-    Nilai XP mingguan dihitung dari penjumlahan HasilAktivitas.skor.
+    Nilai XP mingguan dihitung dari HasilAktivitas dalam 7 hari terakhir.
+    Untuk menjaga query tetap ringan dan aman di semua database,
+    di sini kita cukup menjumlahkan seluruh skor yang tercatat
+    (retake akan menambah kontribusi di papan peringkat, tetapi
+    tidak mempengaruhi total_poin sebenarnya di profil siswa).
     """
     try:
         tujuh_hari_lalu = timezone.now() - timedelta(days=7)
 
         # Agregasi skor mingguan per profil_siswa dari HasilAktivitas.
-        # Hitung skor TERBAIK per aktivitas dalam 7 hari terakhir,
-        # lalu jumlahkan. Dengan cara ini, retake berkali-kali tidak
-        # menggandakan XP di leaderboard.
-        agregat_per_activity = (
+        # Catatan: di sini kita menjumlahkan semua skor retake.
+        # Ini hanya dipakai untuk tampilan leaderboard mingguan,
+        # bukan untuk menambah total_poin di profil.
+        agregat = (
             HasilAktivitas.objects
             .filter(
                 tanggal_pengerjaan__gte=tujuh_hari_lalu,
                 profil_siswa__user__is_staff=False,
             )
-            .values('profil_siswa', 'aktivitas')
-            .annotate(best=Max('skor'))
-        )
-
-        agregat = (
-            agregat_per_activity
             .values('profil_siswa')
-            .annotate(total=Sum('best'))
+            .annotate(total=Sum('skor'))
             .order_by('-total')[:10]
         )
 
@@ -449,7 +513,7 @@ def leaderboard_weekly_view(request):
         for p in profils:
             p.total_poin = total_map.get(p.id, 0)
 
-        serializer = ProfilSiswaSerializer(profils, many=True)
+        serializer = ProfilSiswaSerializer(profils, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     except Exception as e:
@@ -605,6 +669,48 @@ def daftar_quiz_view(request):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def quiz_overall_summary_view(request):
+    """
+    Rangkuman hasil belajar dari SEMUA kuis pilihan ganda
+    untuk siswa yang sedang login.
+
+    Menggunakan HasilAktivitas:
+      - total_quiz_attempts : berapa kali kuis dikerjakan (termasuk retake)
+      - distinct_quizzes    : berapa aktivitas kuis yang sudah pernah dicoba
+      - total_score         : total skor/XP yang pernah dicatat dari semua kuis
+      - average_score       : rata‑rata skor per attempt
+    """
+    profil = request.user.profilsiswa
+
+    hasil_qs = (
+        HasilAktivitas.objects
+        .filter(
+            profil_siswa=profil,
+            aktivitas__tipe_aktivitas='PILIHAN_GANDA',
+        )
+    )
+
+    total_attempts = hasil_qs.count()
+    total_score = hasil_qs.aggregate(total=Sum('skor'))['total'] or 0
+    avg_score = total_score / total_attempts if total_attempts > 0 else 0
+
+    distinct_quizzes = (
+        hasil_qs.values('aktivitas')
+        .distinct()
+        .count()
+    )
+
+    data = {
+        "total_attempts": total_attempts,
+        "distinct_quizzes": distinct_quizzes,
+        "total_score": total_score,
+        "average_score": avg_score,
+    }
+    return Response(data, status=status.HTTP_200_OK)
+
+
 # =========================
 #  TEACHER / GURU ENDPOINTS
 # =========================
@@ -632,13 +738,18 @@ def teacher_students_overview_view(request):
       full_name = f"{user.first_name} {user.last_name}".strip() or user.username
 
       avatar_url = None
-      # Jangan kirim URL untuk avatar default yang tidak punya file fisik,
-      # supaya browser tidak memicu 404 /media/default.jpg
-      if profil.avatar and profil.avatar.name and profil.avatar.name != 'default.jpg':
-          try:
-              avatar_url = request.build_absolute_uri(profil.avatar.url)
-          except Exception:
-              avatar_url = None
+      # Untuk panel guru kita gunakan endpoint avatar publik yang sama
+      # seperti halaman profil siswa, sehingga URL selalu berupa /api/...
+      # dan tidak tergantung pada konfigurasi /media di nginx.
+      if profil.avatar and profil.avatar.name:
+          filename = profil.avatar.name.lower().split("/")[-1]
+          if filename not in {"default.jpg", "default.jpeg", "default.png"}:
+              try:
+                  avatar_url = request.build_absolute_uri(
+                      reverse("profil-avatar-public", args=[profil.id])
+                  )
+              except Exception:
+                  avatar_url = None
 
       data.append(
           {
@@ -646,6 +757,8 @@ def teacher_students_overview_view(request):
               "username": user.username,
               "full_name": full_name,
               "email": user.email,
+              "nisn": profil.nisn,
+              "kelas": profil.kelas,
               "level": profil.level,
               "total_poin": profil.total_poin,
               "missions_completed": missions_completed,
@@ -713,11 +826,15 @@ def teacher_student_detail_view(request, profil_id: int):
   full_name = f"{user.first_name} {user.last_name}".strip() or user.username
 
   avatar_url = None
-  if profil.avatar and profil.avatar.name and profil.avatar.name != 'default.jpg':
-      try:
-          avatar_url = request.build_absolute_uri(profil.avatar.url)
-      except Exception:
-          avatar_url = None
+  if profil.avatar and profil.avatar.name:
+      filename = profil.avatar.name.lower().split("/")[-1]
+      if filename not in {"default.jpg", "default.jpeg", "default.png"}:
+          try:
+              avatar_url = request.build_absolute_uri(
+                  reverse("profil-avatar-public", args=[profil.id])
+              )
+          except Exception:
+              avatar_url = None
 
   badges_qs = (
       LencanaSiswa.objects.filter(profil_siswa=profil)
@@ -740,6 +857,8 @@ def teacher_student_detail_view(request, profil_id: int):
       "username": user.username,
       "full_name": full_name,
       "email": user.email,
+      "nisn": profil.nisn,
+      "kelas": profil.kelas,
       "level": profil.level,
       "total_poin": profil.total_poin,
       "modules": modules_data,
@@ -773,6 +892,67 @@ def teacher_list_view(request):
           }
       )
   return Response(data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def teacher_create_teacher_view(request):
+  """
+  Guru/admin membuat akun guru baru.
+
+  Body minimal:
+    - username (str)
+    - email (str)
+    - password (str)
+
+  Opsional:
+    - first_name (str)
+    - last_name (str)
+  """
+  from django.contrib.auth.models import User
+
+  username = (request.data.get('username') or '').strip()
+  email = (request.data.get('email') or '').strip()
+  password = request.data.get('password') or ''
+  first_name = (request.data.get('first_name') or '').strip()
+  last_name = (request.data.get('last_name') or '').strip()
+
+  if not username or not email or not password:
+      return Response(
+          {"error": "Field 'username', 'email', dan 'password' wajib diisi."},
+          status=status.HTTP_400_BAD_REQUEST,
+      )
+
+  if User.objects.filter(username=username).exists():
+      return Response(
+          {"error": "Username sudah digunakan."},
+          status=status.HTTP_400_BAD_REQUEST,
+      )
+
+  if User.objects.filter(email__iexact=email).exists():
+      return Response(
+          {"error": "Email sudah terdaftar."},
+          status=status.HTTP_400_BAD_REQUEST,
+      )
+
+  user = User(
+      username=username,
+      email=email,
+      first_name=first_name,
+      last_name=last_name,
+      is_staff=True,  # tandai sebagai guru
+  )
+  user.set_password(password)
+  user.save()
+
+  return Response(
+      {
+          "username": user.username,
+          "email": user.email,
+          "full_name": f"{user.first_name} {user.last_name}".strip() or user.username,
+      },
+      status=status.HTTP_201_CREATED,
+  )
 
 
 @api_view(['GET', 'POST'])
@@ -968,32 +1148,55 @@ def teacher_update_module_view(request, modul_id: int):
 def teacher_create_material_view(request):
   """
   Guru membuat materi baru di dalam modul.
-  Body:
-    - modul_id (int)
-    - judul (str)
-    - konten_narasi (str)
-    - urutan (int, optional)
+  Body (multipart/form-data atau JSON):
+    - modul_id     (int, wajib)
+    - judul        (str, wajib)
+    - konten_narasi(str, optional)
+    - urutan       (int, optional)
+    - pdf_file     (file PDF, optional)
   """
-  modul_id = request.data.get('modul_id')
+  modul_id_raw = request.data.get('modul_id')
   judul = request.data.get('judul')
   konten_narasi = request.data.get('konten_narasi', '')
-  urutan = request.data.get('urutan')
+  pdf_file = request.FILES.get('pdf_file')
 
-  if not modul_id or not judul:
-      return Response({"error": "Field 'modul_id' dan 'judul' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+  # Validasi modul_id
+  try:
+      modul_id = int(modul_id_raw)
+  except (TypeError, ValueError):
+      return Response(
+          {"error": "Field 'modul_id' wajib diisi dan harus berupa angka."},
+          status=status.HTTP_400_BAD_REQUEST,
+      )
+
+  if not judul:
+      return Response(
+          {"error": "Field 'judul' wajib diisi."},
+          status=status.HTTP_400_BAD_REQUEST,
+      )
 
   modul = get_object_or_404(Modul, id=modul_id)
 
+  # Urutan bisa dikirim dari frontend atau dihitung otomatis
+  urutan_raw = request.data.get('urutan')
+
   try:
-      if urutan is None:
-          max_urutan = Materi.objects.filter(modul=modul).aggregate(m=Sum('urutan'))['m'] or 0
+      if urutan_raw in (None, '', 'null'):
+          # Urutan berikutnya setelah materi terakhir di modul ini
+          max_urutan = (
+              Materi.objects.filter(modul=modul).aggregate(m=Max('urutan'))['m']
+              or 0
+          )
           urutan = max_urutan + 1
+      else:
+          urutan = int(urutan_raw)
 
       materi = Materi.objects.create(
           modul=modul,
           judul=judul,
           konten_narasi=konten_narasi,
           urutan=urutan,
+          pdf_file=pdf_file,
       )
       serializer = MateriSerializer(materi, context={'request': request})
       return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -1005,15 +1208,19 @@ def teacher_create_material_view(request):
 @permission_classes([IsAdminUser])
 def teacher_update_material_view(request, materi_id: int):
   """
-  Update judul atau konten_narasi sebuah materi.
+  Update judul, konten_narasi, atau file PDF sebuah materi.
+  Menerima multipart/form-data maupun JSON.
   """
   materi = get_object_or_404(Materi, id=materi_id)
 
-  judul = request.data.get('judul', materi.judul)
-  konten_narasi = request.data.get('konten_narasi', materi.konten_narasi)
+  judul = request.data.get('judul') or materi.judul
+  konten_narasi = request.data.get('konten_narasi') or materi.konten_narasi
+  pdf_file = request.FILES.get('pdf_file')
 
   materi.judul = judul
   materi.konten_narasi = konten_narasi
+  if pdf_file is not None:
+      materi.pdf_file = pdf_file
   materi.save()
 
   serializer = MateriSerializer(materi, context={'request': request})

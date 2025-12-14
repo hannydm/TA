@@ -4,6 +4,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework.exceptions import AuthenticationFailed
 from django.core.cache import cache
+from django.urls import reverse
 from .models import (
     ProfilSiswa,
     Modul,
@@ -18,14 +19,25 @@ from .models import (
 )
 
 class RegisterSerializer(serializers.ModelSerializer):
+    """
+    Serializer registrasi akun siswa.
+    Menggunakan model User sebagai basis, dengan field ekstra:
+    - password2 : konfirmasi password
+    - nisn      : nomor induk siswa nasional (opsional)
+    - kelas     : nama / kode kelas (opsional)
+    """
+
     # Field tambahan untuk konfirmasi password
     password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True)
+    # Field tambahan yang akan disimpan ke ProfilSiswa
+    nisn = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    kelas = serializers.CharField(max_length=50, required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'password2']
+        fields = ['username', 'email', 'password', 'password2', 'nisn', 'kelas']
         extra_kwargs = {
-            'password': {'write_only': True} # 'write_only' berarti password tdk akan dikirim balik
+            'password': {'write_only': True}  # 'write_only' berarti password tdk akan dikirim balik
         }
 
     # Fungsi 'save' ini akan dipanggil jika validasi berhasil
@@ -45,8 +57,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
 
+        # Ambil info profil tambahan (boleh kosong)
+        nisn = self.validated_data.get('nisn', '').strip() or None
+        kelas = self.validated_data.get('kelas', '').strip() or None
+
         # Buat ProfilSiswa yang terhubung ke User baru
-        ProfilSiswa.objects.create(user=user)
+        ProfilSiswa.objects.create(user=user, nisn=nisn, kelas=kelas)
 
         return user
     
@@ -62,11 +78,37 @@ class UserSerializer(serializers.ModelSerializer):
 # Profil untuk dibaca frontend (level, poin, avatar)
 class ProfilSiswaSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    # Kirim URL avatar yang sudah dinormalisasi (absolute URL),
+    # atau None jika masih memakai avatar default.
+    avatar = serializers.SerializerMethodField()
 
     class Meta:
         model = ProfilSiswa
-        fields = ['id', 'user', 'avatar', 'level', 'total_poin']
+        fields = ['id', 'user', 'avatar', 'level', 'total_poin', 'nisn', 'kelas']
         read_only_fields = ['id', 'user', 'level', 'total_poin']
+
+    def get_avatar(self, obj: ProfilSiswa):
+        """
+        Kembalikan URL absolut untuk avatar jika ada file fisiknya
+        dan bukan placeholder default. Kalau tidak, kembalikan None.
+        """
+        # Tidak ada avatar sama sekali.
+        if not obj.avatar or not obj.avatar.name:
+            return None
+
+        filename = obj.avatar.name.lower().split('/')[-1]
+        if filename in {'default.jpg', 'default.jpeg', 'default.png'}:
+            # Jangan kirim URL untuk placeholder default.
+            return None
+
+        request = self.context.get('request')
+        if request is None:
+            return None
+
+        # Gunakan endpoint API khusus untuk mengirim file avatar lewat /api/...
+        # supaya selalu lewat reverse proxy yang sama dengan endpoint lainnya.
+        avatar_url = reverse('profil-avatar-public', args=[obj.id])
+        return request.build_absolute_uri(avatar_url)
 
 
 class PilihanJawabanSerializer(serializers.ModelSerializer):
@@ -118,6 +160,7 @@ class MateriSerializer(serializers.ModelSerializer):
             'judul',
             'konten_narasi',
             'urutan',
+            'pdf_file',
             'aktivitas',
             'is_locked',
         ]

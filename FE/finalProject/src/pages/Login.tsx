@@ -35,22 +35,22 @@ const Login = () => {
 
       if (error) {
         const anyError = error as any;
-        let description = error.message || "Login failed";
+        let description = error.message || "Login gagal";
 
         // Jika kredensial salah (401 dari backend), tampilkan pesan yang lebih ramah.
         if (anyError.status === 401) {
-          description = "Username atau password salah. Pastikan sesuai saat registrasi.";
+          description = "Username atau kata sandi salah. Pastikan sesuai saat registrasi.";
         }
 
         toast({
-          title: "Login Failed",
+          title: "Login gagal",
           description,
           variant: "destructive",
         });
       } else {
         toast({
-          title: "Welcome back!",
-          description: "Successfully logged in",
+          title: "Selamat datang kembali!",
+          description: "Berhasil masuk.",
         });
       }
     } catch (error) {
@@ -91,7 +91,7 @@ const Login = () => {
               Petualangan Informatika
             </h1>
             <p className="text-muted-foreground">
-              Welcome to Informatics Adventure
+              Selamat datang di Petualangan Informatika
             </p>
           </div>
 
@@ -106,7 +106,7 @@ const Login = () => {
                   </div>
                   <input
                     type="text"
-                    placeholder="Username"
+                    placeholder="Nama pengguna"
                     className="input-cosmic pl-10"
                     value={formData.username}
                     onChange={(e) => setFormData({...formData, username: e.target.value})}
@@ -126,7 +126,7 @@ const Login = () => {
                   </div>
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Password"
+                    placeholder="Kata sandi"
                     className="input-cosmic pl-10 pr-10"
                     value={formData.password}
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
@@ -157,7 +157,7 @@ const Login = () => {
               className="btn-neon w-full py-3 text-lg font-semibold"
               disabled={isLoading}
             >
-              {isLoading ? "Logging in..." : "Start Adventure"}
+              {isLoading ? "Sedang masuk..." : "Mulai Petualangan"}
             </button>
           </form>
 
@@ -167,14 +167,14 @@ const Login = () => {
               to="/register"
               className="block text-neon-cyan hover:text-neon-cyan-glow transition-colors text-sm"
             >
-              Create New Account
+              Buat Akun Baru
             </Link>
             <div className="text-muted-foreground text-sm">
               <Link 
                 to="/forgot-password"
                 className="hover:text-neon-magenta transition-colors"
               >
-                Forgot Password?
+                Lupa kata sandi?
               </Link>
             </div>
           </div>

@@ -36,7 +36,9 @@ const Modules = () => {
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-12 text-center">
-        <div className="animate-pulse text-neon-cyan text-xl">Loading modules...</div>
+        <div className="animate-pulse text-neon-cyan text-xl">
+          Memuat modul...
+        </div>
       </div>
     );
   }
@@ -46,10 +48,12 @@ const Modules = () => {
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-neon-cyan to-neon-magenta bg-clip-text text-transparent mb-4">
-            Learning Modules
+            Modul Pembelajaran
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Select a module to begin your journey. Each module contains lessons and challenges designed to boost your skills.
+            Pilih salah satu modul untuk memulai perjalananmu. Setiap modul
+            berisi materi dan aktivitas yang dirancang untuk meningkatkan
+            keterampilanmu.
           </p>
         </div>
 
@@ -76,10 +80,10 @@ const Modules = () => {
 
                 <div className="pt-4 flex items-center justify-between border-t border-border/50">
                   <span className="text-xs font-medium px-2 py-1 rounded-full bg-surface text-muted-foreground">
-                    Module {modul.urutan}
+                    Modul {modul.urutan}
                   </span>
                   <div className="flex items-center text-neon-cyan text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                    Start Learning <ArrowRight className="w-4 h-4 ml-1" />
+                    Mulai Belajar <ArrowRight className="w-4 h-4 ml-1" />
                   </div>
                 </div>
               </div>
@@ -90,8 +94,12 @@ const Modules = () => {
         {modules.length === 0 && (
           <div className="text-center py-12 mission-card">
             <Star className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-foreground">No Modules Found</h3>
-            <p className="text-muted-foreground">Check back later for new content!</p>
+            <h3 className="text-xl font-semibold text-foreground">
+              Belum ada modul
+            </h3>
+            <p className="text-muted-foreground">
+              Silakan kembali lagi nanti untuk konten baru.
+            </p>
           </div>
         )}
       </div>

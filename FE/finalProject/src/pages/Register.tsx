@@ -14,6 +14,8 @@ const Register = () => {
   const [formData, setFormData] = useState<RegisterFormData>({
     username: "",
     email: "",
+    nisn: "",
+    kelas: "",
     password: "",
     confirmPassword: "",
   });
@@ -38,19 +40,21 @@ const Register = () => {
       const { error } = await signUp(
         validatedData.email,
         validatedData.password,
-        validatedData.username
+        validatedData.username,
+        validatedData.nisn,
+        validatedData.kelas
       );
 
       if (error) {
         toast({
-          title: "Registration Failed",
-          description: error.message,
+          title: "Pendaftaran Gagal",
+          description: error.message || "Terjadi kesalahan saat membuat akun.",
           variant: "destructive",
         });
       } else {
         toast({
-          title: "Welcome aboard!",
-          description: "Your account has been created. You can now login.",
+          title: "Selamat datang!",
+          description: "Akun kamu berhasil dibuat. Silakan masuk untuk memulai petualangan.",
         });
         navigate("/login");
       }
@@ -98,24 +102,24 @@ const Register = () => {
               <Rocket className="w-10 h-10 text-background" />
             </div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-neon-cyan to-neon-magenta bg-clip-text text-transparent">
-              Join the Adventure
+              Bergabung dalam Petualangan
             </h1>
             <p className="text-muted-foreground">
-              Create your account and start exploring
+              Buat akunmu dan mulai menjelajahi dunia informatika
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label htmlFor="username" className="text-sm font-medium text-foreground">
-                Username
+                Nama pengguna
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
                 <Input
                   id="username"
                   type="text"
-                  placeholder="Choose a username"
+                  placeholder="Pilih nama pengguna"
                   className="pl-10 bg-background/50 border-border"
                   value={formData.username}
                   onChange={(e) =>
@@ -138,7 +142,7 @@ const Register = () => {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="Enter your email"
+                  placeholder="Masukkan email kamu"
                   className="pl-10 bg-background/50 border-border"
                   value={formData.email}
                   onChange={(e) =>
@@ -153,15 +157,61 @@ const Register = () => {
             </div>
 
             <div className="space-y-2">
+              <label htmlFor="nisn" className="text-sm font-medium text-foreground">
+                NISN
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                <Input
+                  id="nisn"
+                  type="text"
+                  placeholder="Masukkan NISN kamu"
+                  className="pl-10 bg-background/50 border-border"
+                  value={formData.nisn}
+                  onChange={(e) =>
+                    setFormData({ ...formData, nisn: e.target.value })
+                  }
+                  disabled={isLoading}
+                />
+              </div>
+              {errors.nisn && (
+                <p className="text-sm text-destructive">{errors.nisn}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="kelas" className="text-sm font-medium text-foreground">
+                Kelas
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                <Input
+                  id="kelas"
+                  type="text"
+                  placeholder="Contoh: X IPA 1"
+                  className="pl-10 bg-background/50 border-border"
+                  value={formData.kelas}
+                  onChange={(e) =>
+                    setFormData({ ...formData, kelas: e.target.value })
+                  }
+                  disabled={isLoading}
+                />
+              </div>
+              {errors.kelas && (
+                <p className="text-sm text-destructive">{errors.kelas}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium text-foreground">
-                Password
+                Kata sandi
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Create a password"
+                  placeholder="Buat kata sandi"
                   className="pl-10 pr-10 bg-background/50 border-border"
                   value={formData.password}
                   onChange={(e) =>
@@ -192,14 +242,14 @@ const Register = () => {
 
             <div className="space-y-2">
               <label htmlFor="confirmPassword" className="text-sm font-medium text-foreground">
-                Confirm Password
+                Konfirmasi kata sandi
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
                 <Input
                   id="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
-                  placeholder="Confirm your password"
+                  placeholder="Ulangi kata sandi"
                   className="pl-10 pr-10 bg-background/50 border-border"
                   value={formData.confirmPassword}
                   onChange={(e) =>
@@ -230,16 +280,16 @@ const Register = () => {
               className="w-full bg-gradient-to-r from-neon-cyan to-neon-magenta hover:opacity-90 transition-opacity"
               disabled={isLoading}
             >
-              {isLoading ? "Creating Account..." : "Create Account"}
+              {isLoading ? "Membuat akun..." : "Buat Akun"}
             </Button>
 
             <div className="text-center text-sm">
-              <span className="text-muted-foreground">Already have an account? </span>
+              <span className="text-muted-foreground">Sudah punya akun? </span>
               <Link
                 to="/login"
                 className="text-neon-cyan hover:text-neon-cyan/80 transition-colors"
               >
-                Login here
+                Masuk di sini
               </Link>
             </div>
           </form>

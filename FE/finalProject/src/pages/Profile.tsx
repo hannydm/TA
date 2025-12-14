@@ -19,6 +19,10 @@ const Profile = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const { profile, authFetch, refreshProfile } = useAuth();
+  const [nisn, setNisn] = useState('');
+  const [kelas, setKelas] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
 
   const [badges, setBadges] = useState<any[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
@@ -33,6 +37,17 @@ const Profile = () => {
   useEffect(() => {
     if (!profile) {
       setProgress(null);
+    }
+  }, [profile]);
+
+  // Sinkronkan nilai input NISN & kelas ketika profil berubah
+  useEffect(() => {
+    if (profile) {
+      setNisn(profile.nisn ?? '');
+      setKelas(profile.kelas ?? '');
+    } else {
+      setNisn('');
+      setKelas('');
     }
   }, [profile]);
 
@@ -111,6 +126,27 @@ const Profile = () => {
       setUploadError('Gagal mengunggah foto profil. Silakan coba lagi.');
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleSaveBasicProfile = async () => {
+    if (!profile) return;
+    setProfileSaveError(null);
+    setIsSavingProfile(true);
+    try {
+      await authFetch('/api/profil/update/', {
+        method: 'POST',
+        body: JSON.stringify({
+          nisn: nisn.trim() || null,
+          kelas: kelas.trim() || null,
+        }),
+      });
+      await refreshProfile();
+    } catch (error) {
+      console.error('Gagal menyimpan data profil dasar', error);
+      setProfileSaveError('Gagal menyimpan NISN / kelas. Silakan coba lagi.');
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -210,7 +246,7 @@ const Profile = () => {
               {/* Level Progress Bar (New) */}
               <div className="mb-6 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Progress to Level {currentLevel + 1}</span>
+                  <span className="text-muted-foreground">Progres menuju Level {currentLevel + 1}</span>
                   <span className="text-neon-cyan font-medium">{levelProgress}/{levelRange} XP</span>
                 </div>
                 <div className="xp-bar h-3">
@@ -220,7 +256,7 @@ const Profile = () => {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground text-right">
-                  {levelRange - levelProgress} XP needed for next level
+                  {levelRange - levelProgress} XP lagi untuk naik level
                 </p>
               </div>
 
@@ -235,7 +271,7 @@ const Profile = () => {
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-mission-completed">{completedMissionCount}</div>
-                  <div className="text-sm text-muted-foreground">Missions</div>
+                  <div className="text-sm text-muted-foreground">Misi</div>
                 </div>
                 <div className="text-center">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -251,7 +287,7 @@ const Profile = () => {
                       disabled={!avatarFile || isUploading}
                       className="btn-neon px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
                     >
-                      {isUploading ? 'Saving...' : 'Save'}
+                      {isUploading ? 'Menyimpan...' : 'Simpan'}
                     </button>
                   </div>
                   {uploadError && (
@@ -265,27 +301,74 @@ const Profile = () => {
           </div>
         </div>
 
+        {/* Basic student data (NISN & kelas) */}
+        <div className="mission-card p-6">
+          <h2 className="text-xl font-bold text-foreground mb-4">Data Siswa</h2>
+          <p className="text-xs text-muted-foreground mb-4">
+            Lengkapi informasi NISN dan kelas agar guru dapat memantau progres belajarmu dengan tepat.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                NISN
+              </label>
+              <input
+                type="text"
+                className="input-cosmic w-full"
+                value={nisn}
+                onChange={(e) => setNisn(e.target.value)}
+                placeholder="Masukkan NISN"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                Kelas
+              </label>
+              <input
+                type="text"
+                className="input-cosmic w-full"
+                value={kelas}
+                onChange={(e) => setKelas(e.target.value)}
+                placeholder="Misalnya: XA, XB, ..."
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={handleSaveBasicProfile}
+              disabled={isSavingProfile}
+              className="btn-neon px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isSavingProfile ? 'Menyimpan...' : 'Simpan Data'}
+            </button>
+            {profileSaveError && (
+              <p className="text-xs text-destructive">{profileSaveError}</p>
+            )}
+          </div>
+        </div>
+
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="mission-card p-6 text-center hover:border-neon-magenta transition-colors">
             <Trophy className="w-10 h-10 text-neon-magenta mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-foreground mb-2">Achievements</h3>
+            <h3 className="text-lg font-bold text-foreground mb-2">Pencapaian</h3>
             <p className="text-4xl font-bold text-neon-magenta mb-1">{earnedBadgesCount}/{achievementsTotal}</p>
-            <p className="text-sm text-muted-foreground">Badges Earned</p>
+            <p className="text-sm text-muted-foreground">Lencana diperoleh</p>
           </div>
 
           <div className="mission-card p-6 text-center hover:border-neon-cyan transition-colors">
             <Star className="w-10 h-10 text-neon-cyan mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-foreground mb-2">Excellence</h3>
+            <h3 className="text-lg font-bold text-foreground mb-2">Ketercapaian</h3>
             <p className="text-4xl font-bold text-neon-cyan mb-1">{completionRate}%</p>
-            <p className="text-sm text-muted-foreground">Completion Rate</p>
+            <p className="text-sm text-muted-foreground">Persentase selesai</p>
           </div>
 
           <div className="mission-card p-6 text-center hover:border-success transition-colors">
             <Calendar className="w-10 h-10 text-success mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-foreground mb-2">Consistency</h3>
+            <h3 className="text-lg font-bold text-foreground mb-2">Konsistensi</h3>
             <p className="text-4xl font-bold text-success mb-1">{streakDays}</p>
-            <p className="text-sm text-muted-foreground">Day Streak</p>
+            <p className="text-sm text-muted-foreground">Hari berturut-turut aktif</p>
           </div>
         </div>
 
@@ -293,14 +376,14 @@ const Profile = () => {
         <div className="mission-card p-8">
           <div className="flex items-center space-x-3 mb-6">
             <Award className="w-6 h-6 text-neon-magenta" />
-            <h2 className="text-2xl font-bold text-foreground">Badge Collection</h2>
+            <h2 className="text-2xl font-bold text-foreground">Koleksi Lencana</h2>
           </div>
 
           {badges.filter(b => b.earned).length === 0 ? (
             <div className="p-8 border-2 border-dashed border-border rounded-xl text-center text-muted-foreground">
               <Trophy className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium mb-2">No badges earned yet</p>
-              <p>Complete missions and quizzes to grow your collection!</p>
+              <p className="text-lg font-medium mb-2">Belum ada lencana yang diperoleh</p>
+              <p>Selesaikan misi dan kuis untuk menambah koleksimu!</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -335,15 +418,15 @@ const Profile = () => {
         <div className="mission-card p-8">
           <h2 className="text-2xl font-bold text-foreground mb-6 flex items-center">
             <Zap className="w-6 h-6 text-neon-cyan mr-3" />
-            Recent Activity
+            Aktivitas Terbaru
           </h2>
 
           <div className="space-y-4">
             {recentActivity.length === 0 ? (
               <div className="p-8 border-2 border-dashed border-border rounded-xl text-center text-muted-foreground">
                 <Zap className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium mb-2">No recent activity</p>
-                <p>Start your first mission to see your journey here!</p>
+                <p className="text-lg font-medium mb-2">Belum ada aktivitas</p>
+                <p>Mulai misi pertamamu untuk melihat perjalananmu di sini!</p>
               </div>
             ) : (
               recentActivity.map((activity, index) => (

@@ -24,6 +24,8 @@ export interface ProfileResponse {
   avatar?: string | null;
   level?: number;
   total_poin?: number;
+  nisn?: string | null;
+  kelas?: string | null;
 }
 
 interface AuthContextType {
@@ -33,7 +35,9 @@ interface AuthContextType {
   signUp: (
     email: string,
     password: string,
-    username: string
+    username: string,
+    nisn: string,
+    kelas: string,
   ) => Promise<{ error: Error | null }>;
   signOut: () => void;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
@@ -248,7 +252,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (email: string, password: string, username: string) => {
+    async (
+      email: string,
+      password: string,
+      username: string,
+      nisn: string,
+      kelas: string
+    ) => {
       try {
         const response = await fetch(buildApiUrl('/api/registrasi/'), {
           method: 'POST',
@@ -258,6 +268,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email,
             password,
             password2: password,
+            nisn,
+            kelas,
           }),
         });
 

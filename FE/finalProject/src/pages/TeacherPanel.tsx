@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { BookOpen, PlusCircle, Users, CheckCircle, ClipboardList, AlertTriangle } from 'lucide-react';
 import { resolveAvatarUrl } from '@/lib/api';
@@ -8,6 +8,8 @@ interface TeacherStudent {
   username: string;
   full_name: string;
   email: string;
+  nisn?: string | null;
+  kelas?: string | null;
   level: number;
   total_poin: number;
   missions_completed: number;
@@ -26,6 +28,7 @@ interface NewMaterialForm {
   judul: string;
   konten_narasi: string;
   urutan?: number;
+  pdfFile?: File | null;
 }
 
 interface QuizChoice {
@@ -121,6 +124,8 @@ interface StudentDetail {
   username: string;
   full_name: string;
   email: string;
+  nisn?: string | null;
+  kelas?: string | null;
   level: number;
   total_poin: number;
   modules: StudentModuleProgress[];
@@ -155,6 +160,14 @@ interface LiveCodeForm {
   instruksi: string;
   poin: number;
   validasi_html: string;
+}
+
+interface NewTeacherForm {
+  username: string;
+  email: string;
+  password: string;
+  first_name: string;
+  last_name: string;
 }
 
 const TeacherPanel = () => {
@@ -202,6 +215,7 @@ const TeacherPanel = () => {
     modul_id: '',
     judul: '',
     konten_narasi: '',
+    pdfFile: null,
   });
   const [editingMaterialId, setEditingMaterialId] = useState<number | null>(null);
 
@@ -237,7 +251,49 @@ const TeacherPanel = () => {
     validasi_html: '',
   });
 
+  const [selectedClassFilter, setSelectedClassFilter] = useState<string>('SEMUA');
+
+  const [newTeacher, setNewTeacher] = useState<NewTeacherForm>({
+    username: '',
+    email: '',
+    password: '',
+    first_name: '',
+    last_name: '',
+  });
+  const [creatingTeacher, setCreatingTeacher] = useState(false);
+
+  // Digunakan untuk meng-scroll ke kartu detail siswa ketika baris tabel diklik
+  const detailRef = useRef<HTMLDivElement | null>(null);
+
   const isTeacher = !!profile?.user?.is_staff;
+
+  // Ringkasan progres global untuk dashboard guru
+  const totalStudents = students.length;
+  const totalXP = students.reduce((sum, s) => sum + (s.total_poin || 0), 0);
+  const totalMissions = students.reduce(
+    (sum, s) => sum + (s.missions_completed || 0),
+    0,
+  );
+  const totalQuizzes = students.reduce(
+    (sum, s) => sum + (s.quizzes_completed || 0),
+    0,
+  );
+  const avgXPPerStudent =
+    totalStudents > 0 ? Math.round(totalXP / totalStudents) : 0;
+
+  // Daftar kelas yang tersedia untuk filter
+  const availableClasses = Array.from(
+    new Set(
+      students
+        .map((s) => (s.kelas || '').trim())
+        .filter((k) => k && k.length > 0),
+    ),
+  ).sort();
+
+  const filteredStudents =
+    selectedClassFilter === 'SEMUA'
+      ? students
+      : students.filter((s) => (s.kelas || '').trim() === selectedClassFilter);
 
   useEffect(() => {
     const load = async () => {
@@ -338,30 +394,38 @@ const TeacherPanel = () => {
     setError(null);
     try {
       const selectedModuleId = newMaterial.modul_id;
-      const payload = {
-        judul: newMaterial.judul,
-        konten_narasi: newMaterial.konten_narasi,
+
+      const buildFormData = () => {
+        const formData = new FormData();
+        if (selectedModuleId) {
+          formData.append('modul_id', selectedModuleId);
+        }
+        formData.append('judul', newMaterial.judul);
+        formData.append('konten_narasi', newMaterial.konten_narasi || '');
+        if (newMaterial.pdfFile) {
+          formData.append('pdf_file', newMaterial.pdfFile);
+        }
+        return formData;
       };
 
       if (editingMaterialId) {
         // Sama seperti modul, kita gunakan POST untuk update materi
         // agar tidak bergantung pada dukungan HTTP PUT di proxy.
+        const formData = buildFormData();
         await authFetch(`/api/teacher/materials/${editingMaterialId}/`, {
           method: 'POST',
-          body: JSON.stringify(payload),
+          body: formData,
         });
         alert('Materi berhasil diperbarui.');
       } else {
+        const formData = buildFormData();
         await authFetch('/api/teacher/materials/create/', {
           method: 'POST',
-          body: JSON.stringify({
-            ...newMaterial,
-            modul_id: parseInt(newMaterial.modul_id, 10),
-          }),
+          body: formData,
         });
         alert('Materi berhasil dibuat.');
       }
-      setNewMaterial({ modul_id: '', judul: '', konten_narasi: '' });
+      setNewMaterial({ modul_id: '', judul: '', konten_narasi: '', pdfFile: null });
       setEditingMaterialId(null);
 
       if (selectedModuleId) {
@@ -672,6 +736,11 @@ const TeacherPanel = () => {
         `/api/teacher/students/${student.id}/detail/`,
       );
       setStudentDetail(detail);
+
+      // Setelah detail berhasil dimuat, scroll ke bagian detail siswa
+      if (detailRef.current) {
+        detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     } catch (e: any) {
       console.error('Failed to load student detail', e);
       setError('Gagal memuat detail siswa.');
@@ -819,6 +888,7 @@ const TeacherPanel = () => {
                     <tr>
                       <th className="px-3 py-2 text-left">Nama</th>
                       <th className="px-3 py-2 text-left hidden md:table-cell">Username</th>
+                      <th className="px-3 py-2 text-left hidden lg:table-cell">Kelas</th>
                       <th className="px-3 py-2 text-right">Level</th>
                       <th className="px-3 py-2 text-right">XP</th>
                       <th className="px-3 py-2 text-right hidden sm:table-cell">
@@ -862,6 +932,9 @@ const TeacherPanel = () => {
                         </td>
                         <td className="px-3 py-2 text-muted-foreground hidden md:table-cell">
                           {s.username}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground hidden lg:table-cell">
+                          {s.kelas || '-'}
                         </td>
                         <td className="px-3 py-2 text-right">{s.level}</td>
                         <td className="px-3 py-2 text-right">{s.total_poin}</td>
@@ -991,8 +1064,27 @@ const TeacherPanel = () => {
                     }))
                   }
                 />
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    File PDF (opsional)
+                  </label>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    className="input-cosmic cursor-pointer"
+                    onChange={(e) =>
+                      setNewMaterial((prev) => ({
+                        ...prev,
+                        pdfFile: e.target.files && e.target.files[0] ? e.target.files[0] : null,
+                      }))
+                    }
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Kamu bisa menulis narasi, mengunggah PDF, atau keduanya sekaligus.
+                  </p>
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Pilih modul terlebih dahulu, lalu isi judul dan konten materi.
+                  Pilih modul terlebih dahulu, lalu isi judul dan konten materi atau unggah PDF.
                 </p>
                 <button
                   type="submit"
@@ -1007,7 +1099,7 @@ const TeacherPanel = () => {
                     className="w-full mt-2 text-xs text-muted-foreground hover:text-neon-cyan"
                     onClick={() => {
                       setEditingMaterialId(null);
-                      setNewMaterial({ modul_id: '', judul: '', konten_narasi: '' });
+                      setNewMaterial({ modul_id: '', judul: '', konten_narasi: '', pdfFile: null });
                     }}
                   >
                     Batal edit materi
@@ -1032,6 +1124,7 @@ const TeacherPanel = () => {
                             modul_id: newMaterial.modul_id,
                             judul: m.judul,
                             konten_narasi: m.konten_narasi,
+                            pdfFile: null,
                           });
                         }}
                       >
@@ -1557,7 +1650,7 @@ const TeacherPanel = () => {
 
         {/* Detail siswa terpilih */}
         {selectedStudent && (
-          <div className="mission-card p-6">
+          <div className="mission-card p-6" ref={detailRef}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-xl font-bold text-foreground">
@@ -1596,6 +1689,12 @@ const TeacherPanel = () => {
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
                         @{studentDetail.username}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        Kelas: {studentDetail.kelas || '-'}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        NISN: {studentDetail.nisn || '-'}
                       </p>
                     </div>
                   </div>

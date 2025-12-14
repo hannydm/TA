@@ -128,13 +128,13 @@ const Dashboard = () => {
                 )}
               </div>
               <h3 className="text-xl font-bold text-foreground">{displayName}</h3>
-              <p className="text-neon-cyan font-medium">Explorer - Level {currentLevel}</p>
+              <p className="text-neon-cyan font-medium">Penjelajah - Level {currentLevel}</p>
             </div>
 
             {/* XP Progress */}
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Level Progress</span>
+                <span className="text-muted-foreground">Progres Level</span>
                 <span className="text-neon-cyan font-medium">{levelProgress}/{levelRange} XP</span>
               </div>
               <div className="xp-bar">
@@ -160,7 +160,7 @@ const Dashboard = () => {
               <div className="flex items-center justify-between p-3 rounded-lg bg-surface/50">
                 <div className="flex items-center space-x-2">
                   <Zap className="w-5 h-5 text-neon-magenta" />
-                  <span className="text-sm">XP Today</span>
+                  <span className="text-sm">XP Hari Ini</span>
                 </div>
                 <span className="font-bold text-neon-magenta">
                   {progress?.xp_today ?? 0}
@@ -174,7 +174,7 @@ const Dashboard = () => {
                 onClick={() => navigate('/profile')}
                 className="w-full btn-cosmic py-2 text-sm"
               >
-                View Profile
+                Lihat Profil
               </button>
             </div>
           </div>
@@ -185,10 +185,10 @@ const Dashboard = () => {
           <div className="space-y-6">
             <div className="text-center">
               <h1 className="text-4xl font-bold bg-gradient-to-r from-neon-cyan to-neon-magenta bg-clip-text text-transparent mb-2">
-                Welcome, Explorer!
+                Selamat datang, Penjelajah!
               </h1>
               <p className="text-muted-foreground">
-                Your cosmic journey through the world of informatics continues...
+                Perjalanan kosmikmu di dunia informatika terus berlanjut...
               </p>
             </div>
 
@@ -203,12 +203,12 @@ const Dashboard = () => {
                     <BookOpen className="w-6 h-6 text-neon-cyan" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-foreground">Start Learning</h3>
-                    <p className="text-sm text-muted-foreground">Access modules & materials</p>
+                    <h3 className="text-lg font-bold text-foreground">Mulai Belajar</h3>
+                    <p className="text-sm text-muted-foreground">Akses modul dan materi</p>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Dive into our curated learning modules and master new skills.
+                  Jelajahi modul pembelajaran yang dikurasi dan kuasai keterampilan baru.
                 </p>
               </div>
 
@@ -221,12 +221,12 @@ const Dashboard = () => {
                     <Zap className="w-6 h-6 text-neon-magenta" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-foreground">Take a Quiz</h3>
-                    <p className="text-sm text-muted-foreground">Test your knowledge</p>
+                    <h3 className="text-lg font-bold text-foreground">Ikuti Kuis</h3>
+                    <p className="text-sm text-muted-foreground">Uji pemahamanmu</p>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Challenge yourself with quizzes and earn XP rewards.
+                  Tantang dirimu dengan kuis dan dapatkan hadiah XP.
                 </p>
               </div>
             </div>
@@ -235,20 +235,20 @@ const Dashboard = () => {
             <div className="mission-card p-6">
               <h2 className="text-xl font-bold text-foreground mb-4 flex items-center">
                 <UserIcon className="w-5 h-5 text-neon-cyan mr-2" />
-                Community Stats
+                Statistik Komunitas
               </h2>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div className="p-4 rounded-xl bg-surface/50">
                   <div className="text-2xl font-bold text-foreground mb-1">{stats.total_explorers}</div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider">Explorers</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider">Penjelajah</div>
                 </div>
                 <div className="p-4 rounded-xl bg-surface/50">
                   <div className="text-2xl font-bold text-neon-cyan mb-1">{stats.active_now}</div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider">Online Now</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider">Sedang Online</div>
                 </div>
                 <div className="p-4 rounded-xl bg-surface/50">
                   <div className="text-2xl font-bold text-neon-magenta mb-1">{stats.missions_completed}</div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider">Missions Done</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider">Misi Selesai</div>
                 </div>
               </div>
             </div>
@@ -257,7 +257,7 @@ const Dashboard = () => {
             <div className="mission-card p-6">
               <h2 className="text-xl font-bold text-foreground mb-4 flex items-center">
                 <Trophy className="w-5 h-5 text-warning mr-2" />
-                Your Badges
+                Lencana Kamu
               </h2>
               <BadgesList />
             </div>
@@ -272,7 +272,7 @@ const Dashboard = () => {
           <div className="mission-card p-6">
             <h3 className="text-lg font-bold text-foreground mb-4 flex items-center">
               <Clock className="w-5 h-5 text-neon-cyan mr-2" />
-              Recent Activity
+              Aktivitas Terbaru
             </h3>
             <div className="space-y-4">
               {/* We need to fetch this from API */}
@@ -285,14 +285,14 @@ const Dashboard = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-foreground flex items-center">
                 <Trophy className="w-5 h-5 text-neon-magenta mr-2" />
-                Top Explorers
+                Penjelajah Teratas
               </h3>
             </div>
 
             {leaderboard.length === 0 ? (
-              <div className="p-4 rounded-xl border border-dashed border-border text-center text-muted-foreground text-sm">
-                No explorers yet. Be the first!
-              </div>
+                <div className="p-4 rounded-xl border border-dashed border-border text-center text-muted-foreground text-sm">
+                  Belum ada penjelajah di leaderboard. Jadilah yang pertama!
+                </div>
             ) : (
               <>
                 <div className="space-y-2">
@@ -339,7 +339,7 @@ const Dashboard = () => {
                   onClick={() => navigate('/leaderboard')}
                   className="w-full mt-4 px-4 py-2 rounded-lg border border-border text-muted-foreground hover:text-neon-magenta hover:border-neon-magenta transition-colors text-sm"
                 >
-                  View Full Ranking
+                  Lihat Peringkat Lengkap
                 </button>
               </>
             )}
@@ -392,8 +392,8 @@ const RecentActivityList = () => {
     fetchActivities();
   }, [authFetch]);
 
-  if (loading) return <div className="text-sm text-muted-foreground">Loading...</div>;
-  if (activities.length === 0) return <div className="text-sm text-muted-foreground">No recent activity.</div>;
+  if (loading) return <div className="text-sm text-muted-foreground">Memuat aktivitas...</div>;
+  if (activities.length === 0) return <div className="text-sm text-muted-foreground">Belum ada aktivitas terbaru.</div>;
 
   return (
     <div className="space-y-3">
@@ -438,8 +438,8 @@ const BadgesList = () => {
     fetchBadges();
   }, [authFetch]);
 
-  if (loading) return <div className="text-sm text-muted-foreground">Loading badges...</div>;
-  if (badges.length === 0) return <div className="text-sm text-muted-foreground">No badges earned yet. Complete modules to earn them!</div>;
+  if (loading) return <div className="text-sm text-muted-foreground">Memuat lencana...</div>;
+  if (badges.length === 0) return <div className="text-sm text-muted-foreground">Belum ada lencana yang diperoleh. Selesaikan modul untuk mendapatkannya!</div>;
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

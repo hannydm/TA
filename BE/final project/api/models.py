@@ -6,6 +6,9 @@ class ProfilSiswa(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     total_poin = models.IntegerField(default=0)
     level = models.IntegerField(default=1)
+    # Informasi tambahan untuk kebutuhan sekolah
+    nisn = models.CharField(max_length=20, blank=True, null=True)
+    kelas = models.CharField(max_length=50, blank=True, null=True)
     avatar = models.ImageField(default='default.jpg', upload_to='profile_images')
     def __str__(self): return f"Profil dari {self.user.username}"
 
@@ -20,6 +23,8 @@ class Materi(models.Model):
     judul = models.CharField(max_length=200)
     konten_narasi = models.TextField()
     urutan = models.IntegerField()
+    # Opsional: file PDF sebagai materi pendukung
+    pdf_file = models.FileField(upload_to='materi_pdf', blank=True, null=True)
     def __str__(self): return f"{self.modul.judul} - {self.judul}"
 
 

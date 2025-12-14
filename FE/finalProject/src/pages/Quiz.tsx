@@ -33,6 +33,26 @@ interface ApiAktivitasQuiz {
   soal_pilgan: ApiSoalPilgan[];
 }
 
+interface Question {
+  id: number;
+  question: string;
+  options: string[];
+  correct: number;
+}
+
+interface QuizHistory {
+  selectedAnswers: number[];
+  score: number;
+  questionIds?: number[];
+}
+
+interface QuizOverallSummary {
+  total_attempts: number;
+  distinct_quizzes: number;
+  total_score: number;
+  average_score: number;
+}
+
 const Quiz = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedQuiz, setSelectedQuiz] = useState<string | null>(null);
@@ -47,6 +67,8 @@ const Quiz = () => {
   const [levelUpToast, setLevelUpToast] = useState<number | null>(null);
   const [badgeToast, setBadgeToast] = useState<string | null>(null);
   const [apiQuizzes, setApiQuizzes] = useState<ApiAktivitasQuiz[]>([]);
+  const [currentQuestions, setCurrentQuestions] = useState<Question[]>([]);
+  const [overallSummary, setOverallSummary] = useState<QuizOverallSummary | null>(null);
   const { authFetch, refreshProfile, profile } = useAuth();
   const [isMuted, setIsMuted] = useState(false);
 
@@ -135,31 +157,18 @@ const Quiz = () => {
 
   const quizList = apiQuizzes.map((q, index) => ({
     id: String(q.id),
-    title: `Quiz ${index + 1}`,
-    description: q.instruksi || 'Quiz from admin',
+    title: `Kuis ${index + 1}`,
+    description: q.instruksi || 'Kuis dari admin',
     questions: q.soal_pilgan.length,
-    difficulty: 'Custom',
-    timeLimit: `${q.soal_pilgan.length || 1} minutes`,
+    difficulty: 'Kustom',
+    timeLimit: `${q.soal_pilgan.length || 1} menit`,
     xpReward: q.poin || 20,
   }));
 
   const currentQuiz = quizList.find((q) => q.id === selectedQuiz);
 
-  const questions =
-    selectedQuiz && apiQuizzes.length
-      ? (() => {
-        const apiQuiz = apiQuizzes.find((q) => String(q.id) === selectedQuiz);
-        if (!apiQuiz) return [];
-        return apiQuiz.soal_pilgan.map((s) => ({
-          question: s.pertanyaan,
-          options: s.pilihan.map((p) => p.teks_jawaban),
-          correct: Math.max(
-            0,
-            s.pilihan.findIndex((p) => p.apakah_benar)
-          ),
-        }));
-      })()
-      : [];
+  // Pertanyaan yang sedang digunakan pada attempt saat ini
+  const questions = currentQuestions;
 
   // Timer Logic
   useEffect(() => {
@@ -185,18 +194,20 @@ const Quiz = () => {
   const QUIZ_HISTORY_PREFIX = `digi_world_quiz_history_${userKey}_`;
   const NEXT_QUIZ_KEY = 'digi_world_next_quiz';
 
-  const loadQuizHistory = (quizId: string) => {
+  const loadQuizHistory = (quizId: string): QuizHistory | null => {
     if (typeof window === 'undefined') return null;
     try {
-      const raw = window.localStorage.getItem(`${QUIZ_HISTORY_PREFIX}${quizId}`);
+      const raw = window.localStorage.getItem(
+        `${QUIZ_HISTORY_PREFIX}${quizId}`,
+      );
       if (!raw) return null;
-      return JSON.parse(raw) as { selectedAnswers: number[]; score: number };
+      return JSON.parse(raw) as QuizHistory;
     } catch {
       return null;
     }
   };
 
-  const saveQuizHistory = (quizId: string, data: { selectedAnswers: number[]; score: number }) => {
+  const saveQuizHistory = (quizId: string, data: QuizHistory) => {
     if (typeof window === 'undefined') return;
     try {
       window.localStorage.setItem(`${QUIZ_HISTORY_PREFIX}${quizId}`, JSON.stringify(data));
@@ -208,35 +219,78 @@ const Quiz = () => {
   const handleStartQuiz = (quizId: string, forceNew: boolean = false) => {
     setSelectedQuiz(quizId);
 
-    // Calculate time based on number of questions (1 minute per question)
-    let questionCount = 0;
-    if (apiQuizzes.length > 0) {
-      const apiQuiz = apiQuizzes.find(q => String(q.id) === quizId);
-      questionCount = apiQuiz ? apiQuiz.soal_pilgan.length : 0;
-    }
+    const apiQuiz = apiQuizzes.find((q) => String(q.id) === quizId);
+    const allQuestions: Question[] =
+      apiQuiz?.soal_pilgan.map((s) => ({
+        id: s.id,
+        question: s.pertanyaan,
+        options: s.pilihan.map((p) => p.teks_jawaban),
+        correct: Math.max(
+          0,
+          s.pilihan.findIndex((p) => p.apakah_benar),
+        ),
+      })) ?? [];
 
-    const calculatedTime = questionCount * 60; // 60 seconds per question
+    // Jika tidak ada soal, pastikan state kosong tapi tetap aman
+    if (!allQuestions.length) {
+      setCurrentQuestions([]);
+    }
 
     if (!forceNew) {
       const history = loadQuizHistory(quizId);
-      if (history) {
-        setQuizState({
-          currentQuestion: 0,
-          selectedAnswers: history.selectedAnswers || [],
-          showResults: true,
-          score: history.score || 0,
-          timeLeft: calculatedTime > 0 ? calculatedTime : 300,
+      if (history && history.questionIds && history.questionIds.length) {
+        // Rekonstruksi urutan soal yang dipakai sebelumnya
+        const questionMap = new Map<number, Question>();
+        allQuestions.forEach((q) => questionMap.set(q.id, q));
+        const restoredQuestions: Question[] = [];
+        history.questionIds.forEach((qid) => {
+          const found = questionMap.get(qid);
+          if (found) restoredQuestions.push(found);
         });
-        return;
+
+        if (restoredQuestions.length) {
+          setCurrentQuestions(restoredQuestions);
+          const calculatedTime = restoredQuestions.length * 60;
+
+          setQuizState({
+            currentQuestion: 0,
+            selectedAnswers: history.selectedAnswers || [],
+            showResults: true,
+            score: history.score || 0,
+            timeLeft: calculatedTime > 0 ? calculatedTime : 300,
+          });
+          return;
+        }
       }
     }
 
+    // Pilih 10 soal secara acak (atau kurang jika total soal < 10)
+    if (allQuestions.length) {
+      const shuffled = [...allQuestions].sort(
+        () => Math.random() - 0.5,
+      );
+      const subset = shuffled.slice(0, Math.min(10, shuffled.length));
+      setCurrentQuestions(subset);
+      const timeForSubset = subset.length * 60;
+
+      setQuizState({
+        currentQuestion: 0,
+        selectedAnswers: [],
+        showResults: false,
+        score: 0,
+        timeLeft: timeForSubset > 0 ? timeForSubset : 300,
+      });
+      return;
+    }
+
+    // Fallback jika tidak ada soal (seharusnya tidak terjadi)
+    setCurrentQuestions([]);
     setQuizState({
       currentQuestion: 0,
       selectedAnswers: [],
       showResults: false,
       score: 0,
-      timeLeft: calculatedTime > 0 ? calculatedTime : 300, // Default to 5 mins if 0 questions (shouldn't happen)
+      timeLeft: 300,
     });
   };
 
@@ -288,6 +342,7 @@ const Quiz = () => {
       saveQuizHistory(selectedQuiz, {
         selectedAnswers: quizState.selectedAnswers,
         score: correctCount,
+        questionIds: questions.map((q) => q.id),
       });
     }
 
@@ -332,6 +387,15 @@ const Quiz = () => {
     // Sinkronkan XP dengan backend setelah quiz selesai
     try {
       await refreshProfile();
+      // Setelah XP tersinkron, ambil rangkuman nilai kuis dari backend
+      try {
+        const summary = await authFetch<QuizOverallSummary>('/api/quiz/summary/');
+        if (summary) {
+          setOverallSummary(summary);
+        }
+      } catch (summaryErr) {
+        console.error('Gagal memuat rangkuman kuis', summaryErr);
+      }
     } catch (err) {
       console.error('Gagal refresh profil setelah quiz', err);
     }
@@ -339,6 +403,7 @@ const Quiz = () => {
 
   const handleBackToQuizzes = () => {
     setSelectedQuiz(null);
+    setCurrentQuestions([]);
     setQuizState({
       currentQuestion: 0,
       selectedAnswers: [],
@@ -371,7 +436,7 @@ const Quiz = () => {
               </div>
 
               <h2 className="text-3xl font-bold text-foreground mb-2">
-                Quiz Completed!
+                Kuis Selesai!
               </h2>
               <p className="text-muted-foreground">
                 {currentQuiz?.title}
@@ -387,7 +452,7 @@ const Quiz = () => {
                   {percentage.toFixed(0)}%
                 </div>
                 <p className="text-xl text-foreground">
-                  {quizState.score} out of {questions.length} correct
+                  {quizState.score} dari {questions.length} soal benar
                 </p>
               </div>
 
@@ -399,25 +464,60 @@ const Quiz = () => {
                 <p className={`font-medium ${isExcellent ? 'text-neon-cyan' :
                   isGood ? 'text-success' : 'text-warning'
                   }`}>
-                  {isExcellent ? 'Excellent! Space Commander Performance!' :
-                    isGood ? 'Good Work! Keep Exploring!' :
-                      'Keep studying to master the cosmos!'}
+                  {isExcellent
+                    ? 'Luar biasa! Performa setara komandan luar angkasa!'
+                    : isGood
+                      ? 'Kerja bagus! Terus jelajahi materi!'
+                      : 'Terus belajar untuk menaklukkan jagat raya!'}
                 </p>
               </div>
 
               {/* XP Rewards */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between p-3 rounded-lg bg-surface/50">
-                  <span className="text-muted-foreground">Quiz Participation</span>
+                  <span className="text-muted-foreground">Partisipasi kuis</span>
                   <span className="text-neon-cyan font-medium">+{currentQuiz?.xpReward} XP</span>
                 </div>
                 {isExcellent && (
                   <div className="flex items-center justify-between p-3 rounded-lg bg-neon-magenta/20">
-                    <span className="text-neon-magenta">Bonus: Score 80%+</span>
+                    <span className="text-neon-magenta">Bonus: Nilai 80%+</span>
                     <span className="text-neon-magenta font-medium">+30 XP</span>
                   </div>
                 )}
               </div>
+
+              {/* Overall Quiz Summary */}
+              {overallSummary && (
+                <div className="mission-card p-4 mt-4 text-left bg-surface/40">
+                  <h3 className="text-lg font-bold text-foreground mb-2">
+                    Rangkuman Nilai Kuis Kamu
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Kuis berbeda yang sudah kamu coba:{" "}
+                    <span className="font-semibold text-foreground">
+                      {overallSummary.distinct_quizzes}
+                    </span>
+                  </p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Total percobaan kuis:{" "}
+                    <span className="font-semibold text-foreground">
+                      {overallSummary.total_attempts}
+                    </span>
+                  </p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Total skor/XP dari semua kuis:{" "}
+                    <span className="font-semibold text-foreground">
+                      {overallSummary.total_score}
+                    </span>
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Rata-rata skor per percobaan:{" "}
+                    <span className="font-semibold text-foreground">
+                      {overallSummary.average_score.toFixed(1)}
+                    </span>
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Answer Summary */}
@@ -456,13 +556,13 @@ const Quiz = () => {
                 onClick={handleBackToQuizzes}
                 className="btn-neon w-full py-3"
               >
-                Continue Exploring
+                Kembali ke daftar kuis
               </button>
               <button
                 onClick={() => selectedQuiz && handleStartQuiz(selectedQuiz, true)}
                 className="w-full px-4 py-2 rounded-lg border border-border text-muted-foreground hover:text-neon-cyan hover:border-neon-cyan transition-colors"
               >
-                Retake Quiz
+                Ulangi kuis
               </button>
             </div>
           </div>
@@ -512,13 +612,13 @@ const Quiz = () => {
                 onClick={handleBackToQuizzes}
                 className="text-muted-foreground hover:text-neon-cyan transition-colors"
               >
-                Back to Quizzes
+                Kembali ke daftar kuis
               </button>
               <div className="flex items-center space-x-4 text-muted-foreground">
                 <button
                   onClick={() => setIsMuted(!isMuted)}
                   className="hover:text-neon-cyan transition-colors"
-                  title={isMuted ? "Unmute Music" : "Mute Music"}
+                  title={isMuted ? 'Nyalakan musik' : 'Matikan musik'}
                 >
                   {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                 </button>
@@ -532,12 +632,12 @@ const Quiz = () => {
             <h1 className="text-2xl font-bold text-foreground mb-2">{currentQuiz?.title}</h1>
 
             {/* Progress Bar */}
-            <div className="space-y-2">
+              <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
-                  Question {quizState.currentQuestion + 1} of {questions.length}
+                  Pertanyaan {quizState.currentQuestion + 1} dari {questions.length}
                 </span>
-                <span className="text-neon-cyan">{progress.toFixed(0)}% Complete</span>
+                <span className="text-neon-cyan">{progress.toFixed(0)}% Selesai</span>
               </div>
               <div className="w-full h-2 rounded-full bg-surface">
                 <div
@@ -586,7 +686,7 @@ const Quiz = () => {
                 disabled={quizState.currentQuestion === 0}
                 className="px-6 py-2 rounded-lg border border-border text-muted-foreground hover:text-neon-cyan hover:border-neon-cyan transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Previous
+                Sebelumnya
               </button>
 
               <button
@@ -595,7 +695,7 @@ const Quiz = () => {
                 className="btn-neon px-6 py-2 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>
-                  {quizState.currentQuestion === questions.length - 1 ? 'Submit Quiz' : 'Next'}
+                  {quizState.currentQuestion === questions.length - 1 ? 'Kirim jawaban' : 'Berikutnya'}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -632,10 +732,10 @@ const Quiz = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-neon-cyan to-neon-magenta bg-clip-text text-transparent mb-2">
-            Cosmic Quizzes
+            Kuis Kosmik
           </h1>
           <p className="text-muted-foreground">
-            Test your knowledge and earn XP rewards for your cosmic journey
+            Uji pemahamanmu dan dapatkan XP untuk perjalanan kosmikmu
           </p>
         </div>
 
@@ -664,7 +764,7 @@ const Quiz = () => {
                       onClick={() => handleStartQuiz(quiz.id)}
                       className="btn-neon px-6 py-2 flex items-center space-x-2"
                     >
-                      <span>Start Quiz</span>
+                      <span>Mulai kuis</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -673,19 +773,19 @@ const Quiz = () => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                     <div className="text-center p-3 rounded-lg bg-surface/30">
                       <div className="text-lg font-bold text-neon-cyan">{quiz.questions}</div>
-                      <div className="text-xs text-muted-foreground">Questions</div>
+                      <div className="text-xs text-muted-foreground">Jumlah soal</div>
                     </div>
                     <div className="text-center p-3 rounded-lg bg-surface/30">
                       <div className="text-lg font-bold text-neon-magenta">{quiz.difficulty}</div>
-                      <div className="text-xs text-muted-foreground">Difficulty</div>
+                      <div className="text-xs text-muted-foreground">Tingkat kesulitan</div>
                     </div>
                     <div className="text-center p-3 rounded-lg bg-surface/30">
                       <div className="text-lg font-bold text-warning">{quiz.timeLimit}</div>
-                      <div className="text-xs text-muted-foreground">Time Limit</div>
+                      <div className="text-xs text-muted-foreground">Batas waktu</div>
                     </div>
                     <div className="text-center p-3 rounded-lg bg-surface/30">
                       <div className="text-lg font-bold text-success">+{quiz.xpReward} XP</div>
-                      <div className="text-xs text-muted-foreground">Base Reward</div>
+                      <div className="text-xs text-muted-foreground">Hadiah dasar</div>
                     </div>
                   </div>
                 </div>
@@ -698,7 +798,7 @@ const Quiz = () => {
         <div className="mission-card p-6">
           <h2 className="text-xl font-bold text-foreground mb-4 flex items-center">
             <Zap className="w-5 h-5 text-neon-cyan mr-2" />
-            Quiz Mastery Tips
+            Tips Menguasai Kuis
           </h2>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -708,8 +808,8 @@ const Quiz = () => {
                   <span className="text-xs font-bold text-neon-cyan">1</span>
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">Read Carefully</p>
-                  <p className="text-sm text-muted-foreground">Take time to understand each question before answering</p>
+                  <p className="font-medium text-foreground">Baca dengan saksama</p>
+                  <p className="text-sm text-muted-foreground">Luangkan waktu untuk memahami setiap soal sebelum menjawab</p>
                 </div>
               </div>
               <div className="flex items-start space-x-3">
@@ -717,8 +817,8 @@ const Quiz = () => {
                   <span className="text-xs font-bold text-neon-magenta">2</span>
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">Process of Elimination</p>
-                  <p className="text-sm text-muted-foreground">Remove obviously wrong answers to improve your odds</p>
+                  <p className="font-medium text-foreground">Metode eliminasi</p>
+                  <p className="text-sm text-muted-foreground">Singkirkan jawaban yang jelas salah untuk memperbesar peluang benar</p>
                 </div>
               </div>
             </div>
@@ -729,8 +829,8 @@ const Quiz = () => {
                   <span className="text-xs font-bold text-success">3</span>
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">Time Management</p>
-                  <p className="text-sm text-muted-foreground">Don't spend too long on any single question</p>
+                  <p className="font-medium text-foreground">Manajemen waktu</p>
+                  <p className="text-sm text-muted-foreground">Jangan terlalu lama pada satu soal saja</p>
                 </div>
               </div>
               <div className="flex items-start space-x-3">
@@ -739,7 +839,7 @@ const Quiz = () => {
                 </div>
                 <div>
                   <p className="font-medium text-foreground">Bonus XP</p>
-                  <p className="text-sm text-muted-foreground">Score 80%+ to earn bonus XP rewards!</p>
+                  <p className="text-sm text-muted-foreground">Raih nilai 80%+ untuk mendapatkan bonus XP!</p>
                 </div>
               </div>
             </div>
@@ -767,6 +867,6 @@ const Quiz = () => {
       )}
     </div>
   );
-};
+}
 
 export default Quiz;

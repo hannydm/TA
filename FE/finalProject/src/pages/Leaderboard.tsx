@@ -191,7 +191,7 @@ const Leaderboard = () => {
         {/* Header */}
         <div className="text-center">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-neon-cyan to-neon-magenta bg-clip-text text-transparent mb-2">
-            Explorer Ranking
+            Peringkat Penjelajah
           </h1>
           <p className="text-muted-foreground">
             Lihat posisi kamu di antara para penjelajah kosmik lainnya.
@@ -209,7 +209,7 @@ const Leaderboard = () => {
                   : 'text-muted-foreground hover:text-neon-cyan'
               }`}
             >
-              Weekly
+              Mingguan
             </button>
             <button
               onClick={() => setFilter('overall')}
@@ -219,7 +219,7 @@ const Leaderboard = () => {
                   : 'text-muted-foreground hover:text-neon-magenta'
               }`}
             >
-              All Time
+              Sepanjang Waktu
             </button>
           </div>
         </div>
@@ -231,7 +231,7 @@ const Leaderboard = () => {
             <div className="mission-card p-6">
               <h2 className="text-xl font-bold text-foreground mb-6 flex items-center">
                 <Trophy className="w-5 h-5 text-neon-magenta mr-2" />
-                {filter === 'weekly' ? 'This Week' : 'All Time'} Rankings
+                {filter === 'weekly' ? 'Peringkat Minggu Ini' : 'Peringkat Sepanjang Waktu'}
               </h2>
 
               {hasPlayers ? (
@@ -338,7 +338,7 @@ const Leaderboard = () => {
 
                         {player.isCurrentUser && (
                           <span className="px-3 py-1 rounded-full text-xs font-medium bg-neon-cyan/20 text-neon-cyan">
-                            You
+                            Kamu
                           </span>
                         )}
                       </div>
@@ -363,14 +363,14 @@ const Leaderboard = () => {
             <div className="mission-card p-6">
               <h3 className="text-lg font-bold text-foreground mb-4 flex items-center">
                 <Calendar className="w-5 h-5 text-success mr-2" />
-                Global Stats
+                Statistik Global
               </h3>
 
               {stats ? (
                 <div className="space-y-3">
                   <div className="flex justify-between items-center p-3 rounded-lg bg-surface/30">
                     <span className="text-sm text-muted-foreground">
-                      Total Explorers
+                      Total Penjelajah
                     </span>
                     <span className="font-bold text-lg text-neon-cyan">
                       {stats.total_explorers}
@@ -378,7 +378,7 @@ const Leaderboard = () => {
                   </div>
                   <div className="flex justify-between items-center p-3 rounded-lg bg-surface/30">
                     <span className="text-sm text-muted-foreground">
-                      Missions Completed
+                      Misi Selesai
                     </span>
                     <span className="font-bold text-lg text-neon-magenta">
                       {stats.missions_completed}
@@ -386,7 +386,7 @@ const Leaderboard = () => {
                   </div>
                   <div className="flex justify-between items-center p-3 rounded-lg bg-surface/30">
                     <span className="text-sm text-muted-foreground">
-                      XP Earned Today
+                      XP Didapat Hari Ini
                     </span>
                     <span className="font-bold text-lg text-success">
                       {stats.xp_today}
@@ -394,7 +394,7 @@ const Leaderboard = () => {
                   </div>
                   <div className="flex justify-between items-center p-3 rounded-lg bg-surface/30">
                     <span className="text-sm text-muted-foreground">
-                      Active Now
+                      Sedang Aktif
                     </span>
                     <span className="font-bold text-lg text-warning">
                       {stats.active_now}
@@ -412,7 +412,7 @@ const Leaderboard = () => {
             <div className="mission-card p-6">
               <h3 className="text-lg font-bold text-foreground mb-4 flex items-center">
                 <TrendingUp className="w-5 h-5 text-neon-cyan mr-2" />
-                Top Performers
+                Pencapaian Teratas
               </h3>
 
               <div className="space-y-3">
@@ -456,7 +456,7 @@ const Leaderboard = () => {
             <div className="mission-card p-6">
               <h3 className="text-lg font-bold text-foreground mb-4 flex items-center">
                 <Zap className="w-5 h-5 text-neon-magenta mr-2" />
-                Achievement Spotlight
+                Sorotan Pencapaian
               </h3>
 
               {achievementSource.length === 0 ? (
@@ -470,7 +470,7 @@ const Leaderboard = () => {
                       <div className="flex items-center space-x-2 mb-2">
                         <span className="text-2xl">🏆</span>
                         <span className="font-medium text-neon-cyan">
-                          Most Improved
+                          Paling berkembang
                         </span>
                       </div>
                       <p className="text-sm text-muted-foreground">
@@ -484,7 +484,7 @@ const Leaderboard = () => {
                     <div className="p-4 rounded-lg bg-gradient-to-r from-warning/10 to-success/10 border border-warning/30">
                       <div className="flex items-center space-x-2 mb-2">
                         <span className="text-2xl">⚡</span>
-                        <span className="font-medium text-warning">Speed Demon</span>
+                        <span className="font-medium text-warning">Paling aktif</span>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {speedDemon.name} tampil sangat aktif dengan{' '}
@@ -503,7 +503,7 @@ const Leaderboard = () => {
         <div className="mission-card p-6">
           <h2 className="text-xl font-bold text-foreground mb-4 flex items-center">
             <Trophy className="w-5 h-5 text-neon-cyan mr-2" />
-            Cosmic Competition Rules
+            Aturan Kompetisi Kosmik
           </h2>
 
           <div className="grid md:grid-cols-3 gap-6">
@@ -511,7 +511,7 @@ const Leaderboard = () => {
               <div className="w-12 h-12 mx-auto rounded-full bg-neon-cyan/20 flex items-center justify-center mb-3">
                 <Zap className="w-6 h-6 text-neon-cyan" />
               </div>
-              <h3 className="font-semibold text-foreground mb-2">Earn XP</h3>
+              <h3 className="font-semibold text-foreground mb-2">Dapatkan XP</h3>
               <p className="text-sm text-muted-foreground">
                 Selesaikan misi, quiz, dan tantangan untuk mengumpulkan XP.
               </p>
@@ -521,7 +521,7 @@ const Leaderboard = () => {
               <div className="w-12 h-12 mx-auto rounded-full bg-neon-magenta/20 flex items-center justify-center mb-3">
                 <TrendingUp className="w-6 h-6 text-neon-magenta" />
               </div>
-              <h3 className="font-semibold text-foreground mb-2">Weekly Reset</h3>
+              <h3 className="font-semibold text-foreground mb-2">Reset Mingguan</h3>
               <p className="text-sm text-muted-foreground">
                 Peringkat mingguan di-reset setiap Senin agar semua punya peluang baru.
               </p>
@@ -531,7 +531,7 @@ const Leaderboard = () => {
               <div className="w-12 h-12 mx-auto rounded-full bg-success/20 flex items-center justify-center mb-3">
                 <Crown className="w-6 h-6 text-success" />
               </div>
-              <h3 className="font-semibold text-foreground mb-2">Special Rewards</h3>
+              <h3 className="font-semibold text-foreground mb-2">Hadiah Spesial</h3>
               <p className="text-sm text-muted-foreground">
                 Top performer bisa mendapatkan badge eksklusif dan gelar kehormatan.
               </p>

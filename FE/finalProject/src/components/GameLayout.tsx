@@ -31,7 +31,7 @@ const GameLayout = () => {
       <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
         <div className="starfield"></div>
         <p className="relative z-10 text-lg text-muted-foreground">
-          Preparing your adventure...
+          Menyiapkan petualanganmu...
         </p>
       </div>
     );
@@ -52,12 +52,12 @@ const GameLayout = () => {
   const isTeacher = !!profile.user?.is_staff;
 
   const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: Rocket },
-    { path: '/profile', label: 'Profile', icon: User },
-    { path: '/materials', label: 'Materials', icon: BookOpen },
-    { path: '/quiz', label: 'Quizzes', icon: Zap },
-    { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
-    ...(isTeacher ? [{ path: '/teacher', label: 'Teacher', icon: GraduationCap }] : []),
+    { path: '/dashboard', label: 'Beranda', icon: Rocket },
+    { path: '/profile', label: 'Profil', icon: User },
+    { path: '/materials', label: 'Materi', icon: BookOpen },
+    { path: '/quiz', label: 'Kuis', icon: Zap },
+    { path: '/leaderboard', label: 'Papan Peringkat', icon: Trophy },
+    ...(isTeacher ? [{ path: '/teacher', label: 'Guru', icon: GraduationCap }] : []),
   ];
 
   return (
@@ -135,7 +135,7 @@ const GameLayout = () => {
               <button
                 onClick={handleLogout}
                 className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                title="Logout"
+                title="Keluar"
               >
                 <LogOut className="w-4 h-4" />
               </button>

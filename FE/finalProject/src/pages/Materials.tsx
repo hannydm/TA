@@ -103,10 +103,13 @@ const PuzzleActivity = ({ material, onComplete }: { material: Material; onComple
     const correct = material.puzzleAnswer?.replace(/\s+/g, '') === userAnswer.replace(/\s+/g, '');
 
     if (correct) {
-      setMessage({ text: 'Correct! Great job.', type: 'success' });
+      setMessage({ text: 'Jawaban benar, hebat!', type: 'success' });
       onComplete();
     } else {
-      setMessage({ text: 'Incorrect sequence. Try again.', type: 'error' });
+      setMessage({
+        text: 'Urutan kode masih belum tepat, coba lagi ya.',
+        type: 'error',
+      });
     }
   };
 
@@ -114,15 +117,24 @@ const PuzzleActivity = ({ material, onComplete }: { material: Material; onComple
     <div className="mb-8 p-6 rounded-xl border border-border bg-surface/30">
       <h3 className="text-xl font-bold text-foreground mb-4 flex items-center">
         <Code className="w-5 h-5 text-neon-magenta mr-2" />
-        Puzzle Code Challenge
+        Tantangan Kode (Puzzle)
       </h3>
-      <p className="text-muted-foreground mb-6">{material.activityInstruction || "Arrange the blocks to form the correct code."}</p>
+      <p className="text-muted-foreground mb-6">
+        {material.activityInstruction ||
+          'Susun blok-blok kode di bawah ini agar membentuk jawaban yang benar.'}
+      </p>
 
       {/* Drop Zone */}
       <div className="mb-6">
-        <label className="text-sm font-medium text-foreground mb-2 block">Your Solution:</label>
+        <label className="text-sm font-medium text-foreground mb-2 block">
+          Solusi Kamu:
+        </label>
         <div className="min-h-[60px] p-4 rounded-lg bg-black/50 border-2 border-dashed border-border flex flex-wrap gap-2 items-center">
-          {userSequence.length === 0 && <span className="text-muted-foreground text-sm italic">Click blocks below to add them here...</span>}
+          {userSequence.length === 0 && (
+            <span className="text-muted-foreground text-sm italic">
+              Klik blok kode di bawah untuk menambahkannya ke sini...
+            </span>
+          )}
           {userSequence.map((block, idx) => (
             <button
               key={`${block}-${idx}`}
@@ -137,7 +149,9 @@ const PuzzleActivity = ({ material, onComplete }: { material: Material; onComple
 
       {/* Available Blocks */}
       <div className="mb-6">
-        <label className="text-sm font-medium text-foreground mb-2 block">Available Blocks:</label>
+        <label className="text-sm font-medium text-foreground mb-2 block">
+          Blok Kode Tersedia:
+        </label>
         <div className="flex flex-wrap gap-2">
           {availableBlocks.map((block, idx) => (
             <button
@@ -164,7 +178,7 @@ const PuzzleActivity = ({ material, onComplete }: { material: Material; onComple
           className="btn-neon px-6 py-2"
           disabled={userSequence.length === 0}
         >
-          Check Answer
+          Cek Jawaban
         </button>
       </div>
     </div>
@@ -206,7 +220,7 @@ const Materials = () => {
         id: String(m.id),
         backendId: m.id,
         title: m.judul,
-        duration: '10 min',
+        duration: '10 menit',
         status: status,
         content: m.konten_narasi,
         xpReward: m.aktivitas ? m.aktivitas.poin : 10,
@@ -339,7 +353,7 @@ const Materials = () => {
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8 text-center">
-        <div className="animate-pulse text-neon-cyan">Loading materials...</div>
+        <div className="animate-pulse text-neon-cyan">Memuat materi...</div>
       </div>
     );
   }
@@ -357,7 +371,7 @@ const Materials = () => {
               onClick={() => setSelectedMaterial(null)}
               className="btn-cosmic px-4 py-2 flex items-center"
             >
-              <ArrowLeft className="w-4 h-4 mr-2" /> Back to List
+              <ArrowLeft className="w-4 h-4 mr-2" /> Kembali ke daftar materi
             </button>
 
             {material.status !== 'completed' && material.activityType !== 'DEMO_HTML' && material.activityType !== 'PUZZLE_CODE' && (
@@ -367,7 +381,7 @@ const Materials = () => {
                   className="btn-neon px-6 py-2 flex items-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <CheckCircle className="w-4 h-4" />
-                  <span>Mark as Completed (+{material.xpReward} XP)</span>
+                  <span>Tandai selesai (+{material.xpReward} XP)</span>
                 </button>
             )}
           </div>
@@ -429,7 +443,7 @@ const Materials = () => {
                           !userCode.includes('}')
                         ) {
                           output =
-                            'Error: Invalid C code structure. Ensure you have a main function.';
+                            'Error: Struktur kode C tidak valid. Pastikan kamu memiliki fungsi main().';
                         } else if (validation) {
                           // Normalise whitespace so guru bisa menulis validasi
                           // dalam satu baris, sementara siswa boleh pakai enter / spasi.
@@ -437,7 +451,7 @@ const Materials = () => {
                           const normalizedValidation = validation.replace(/\s+/g, '');
 
                           if (!normalizedUser.includes(normalizedValidation)) {
-                            output = `Error: Code must contain "${validation}"`;
+                            output = `Error: Kode harus mengandung \"${validation}\"`;
                           }
                         }
 
@@ -450,24 +464,24 @@ const Materials = () => {
                           if (printfMatch) {
                             output = printfMatch[1];
                           } else {
-                            output = 'Program executed successfully.';
+                            output = 'Program berhasil dijalankan.';
                           }
-                          output += '\n\n[Process completed with exit code 0]';
+                          output += '\n\n[Proses selesai dengan kode keluar 0]';
                         }
 
                         setCodeOutput(output);
                       }}
                       className="btn-neon px-4 py-2 self-end text-sm"
                     >
-                      Run Code
+                      Jalankan kode
                     </button>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">Terminal Output</label>
+                    <label className="text-sm font-medium text-foreground mb-2 block">Keluaran terminal</label>
                     <div
                       className="w-full h-64 p-4 rounded-lg bg-black text-green-500 font-mono text-sm overflow-auto border border-border/50 shadow-inner"
                     >
-                      <pre className="whitespace-pre-wrap">{codeOutput || "// Output will appear here..."}</pre>
+                      <pre className="whitespace-pre-wrap">{codeOutput || "// Output akan muncul di sini..."}</pre>
                     </div>
                   </div>
                 </div>
@@ -488,18 +502,21 @@ const Materials = () => {
             {/* Quiz Activity (Pilihan Ganda) */}
             {material.activityType === 'PILIHAN_GANDA' && (
               <div className="mb-8 p-6 rounded-xl border border-border bg-surface/30">
-                <h3 className="text-xl font-bold text-foreground mb-4 flex items-center">
-                  <Zap className="w-5 h-5 text-neon-magenta mr-2" />
-                  Quiz Challenge
-                </h3>
-                <p className="text-muted-foreground mb-6">{material.activityInstruction || "Test your knowledge with this quiz!"}</p>
+              <h3 className="text-xl font-bold text-foreground mb-4 flex items-center">
+                <Zap className="w-5 h-5 text-neon-magenta mr-2" />
+                Tantangan Kuis
+              </h3>
+              <p className="text-muted-foreground mb-6">
+                {material.activityInstruction ||
+                  'Uji pemahamanmu melalui kuis ini!'}
+              </p>
 
                 <button
                   onClick={() => navigate(`/quiz?id=${material.aktivitasId}`)}
                   className="btn-neon px-8 py-3 flex items-center space-x-2"
                 >
-                  <Play className="w-5 h-5" />
-                  <span>Start Quiz</span>
+                    <Play className="w-5 h-5" />
+                    <span>Mulai Kuis</span>
                 </button>
               </div>
             )}
@@ -517,7 +534,7 @@ const Materials = () => {
                       className="btn-neon px-8 py-3 flex items-center space-x-2 mx-auto disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <Zap className="w-5 h-5" />
-                      <span>Complete & Gain {material.xpReward} XP</span>
+                      <span>Tandai Selesai &amp; Dapatkan {material.xpReward} XP</span>
                     </button>
                 </div>
               </div>
@@ -557,11 +574,11 @@ const Materials = () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Sidebar */}
         <div className="lg:col-span-1">
-          <div className="mission-card p-6 sticky top-24">
-            <h2 className="text-xl font-bold text-foreground mb-4 flex items-center">
-              <BookOpen className="w-5 h-5 text-neon-cyan mr-2" />
-              Modules
-            </h2>
+            <div className="mission-card p-6 sticky top-24">
+              <h2 className="text-xl font-bold text-foreground mb-4 flex items-center">
+                <BookOpen className="w-5 h-5 text-neon-cyan mr-2" />
+                Daftar Modul
+              </h2>
             <div className="space-y-2">
               {modules.map((mod) => (
                 <div
@@ -586,7 +603,7 @@ const Materials = () => {
                 onClick={() => navigate('/modules')}
                 className="w-full btn-outline py-2 text-sm"
               >
-                View All Modules
+                Lihat Semua Modul
               </button>
             </div>
           </div>
@@ -600,7 +617,7 @@ const Materials = () => {
               {moduleTitle}
             </h1>
             <p className="text-muted-foreground">
-              Complete the materials below to master this module.
+              Selesaikan materi di bawah ini untuk menguasai modul ini.
             </p>
           </div>
 
