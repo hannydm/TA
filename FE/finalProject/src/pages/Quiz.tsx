@@ -109,7 +109,7 @@ const Quiz = () => {
     try {
       const clone = quizSfxRef.current.cloneNode(true) as HTMLAudioElement;
       clone.volume = quizSfxRef.current.volume;
-      clone.play().catch(() => {});
+      clone.play().catch(() => { });
     } catch {
       // ignore audio errors
     }
@@ -159,9 +159,9 @@ const Quiz = () => {
     id: String(q.id),
     title: `Kuis ${index + 1}`,
     description: q.instruksi || 'Kuis dari admin',
-    questions: q.soal_pilgan.length,
+    questions: Math.min(10, q.soal_pilgan.length),
     difficulty: 'Kustom',
-    timeLimit: `${q.soal_pilgan.length || 1} menit`,
+    timeLimit: `${Math.min(10, q.soal_pilgan.length || 1)} menit`,
     xpReward: q.poin || 20,
   }));
 
@@ -632,7 +632,7 @@ const Quiz = () => {
             <h1 className="text-2xl font-bold text-foreground mb-2">{currentQuiz?.title}</h1>
 
             {/* Progress Bar */}
-              <div className="space-y-2">
+            <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
                   Pertanyaan {quizState.currentQuestion + 1} dari {questions.length}

@@ -27,7 +27,8 @@ load_dotenv(BASE_DIR / '.env')
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-qxxgffbqo3rwih*%tqs%-3=e&fyu)8yqb8ojwb5xvv4vk4r=^&')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = [
     "localhost",
@@ -166,3 +167,13 @@ CORS_ALLOWED_ORIGINS = [
     "http://digiworld.biz.id",
     "https://digiworld.biz.id",
 ]
+
+# CSRF settings for production (Nginx/HTTPS)
+CSRF_TRUSTED_ORIGINS = [
+    "https://digiworld.biz.id",
+]
+
+# Nginx SSL/Proxy headers
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True

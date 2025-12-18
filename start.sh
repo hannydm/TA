@@ -5,11 +5,21 @@
 
 set -e
 
+
+# Hapus container lama & network yang stuck
+echo "==> Cleaning up old containers and networks..."
+docker compose down --remove-orphans || true
+docker network prune -f || true
+
 echo "==> Pulling latest Docker images (backend, frontend)..."
-docker compose pull
+# Gunakan flag "|| true" agar script tidak berhenti jika pull gagal (misal masalah koneksi internet)
+docker compose pull || true
 
 echo "==> Starting Docker containers (backend, frontend, mysql)..."
-docker compose up -d
+# PENTING: Gunakan --no-build agar Docker menggunakan image yang baru saja di-pull dari Docker Hub.
+# Jika menggunakan --build, Docker akan membuat ulang image dari source code LAMA yang ada di folder ini (VPS),
+# sehingga perbaikan Anda tidak akan terlihat.
+docker compose up -d --no-build
 
 echo ""
 echo "==> Semua container sudah dijalankan."

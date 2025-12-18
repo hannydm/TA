@@ -324,13 +324,18 @@ const Profile = () => {
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Kelas
               </label>
-              <input
-                type="text"
+              <select
                 className="input-cosmic w-full"
                 value={kelas}
                 onChange={(e) => setKelas(e.target.value)}
-                placeholder="Misalnya: XA, XB, ..."
-              />
+              >
+                <option value="" disabled>Pilih Kelas</option>
+                {['XA', 'XB', 'XC', 'XD', 'XE', 'XF', 'XG', 'XH', 'XI', 'XJ', 'XK'].map((cls) => (
+                  <option key={cls} value={cls}>
+                    {cls}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="mt-4 flex items-center gap-3 flex-wrap">

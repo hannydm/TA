@@ -194,3 +194,55 @@ Beberapa langkah lanjutan yang disarankan untuk server produksi:
 - Pertimbangkan mengganti `runserver` menjadi `gunicorn` + `nginx` jika beban pengguna semakin besar.
 
   Untuk awal, konfigurasi Docker Compose di repo ini sudah cukup untuk demo dan deploy di server kecil yang diakses oleh satu sekolah/kampus.
+
+## 9. CI/CD Otomatis dengan GitHub Actions
+
+Repo ini sudah dilengkapi dengan workflow GitHub Actions di `.github/workflows/docker-publish.yml`.
+Setiap kali ada push ke branch `master` atau `main`, GitHub akan otomatis:
+
+1.  Membangun image backend dan frontend.
+2.  Push image ke Docker Hub dengan tag `:latest`.
+
+### Konfigurasi Secrets
+
+Agar workflow berjalan, kamu WAJIB menambahkan secrets di repository GitHub (Settings > Secrets and variables > Actions):
+
+- `DOCKERHUB_USERNAME`: Username Docker Hub kamu.
+- `DOCKERHUB_TOKEN`: Access Token Docker Hub (bukan password).
+
+Setelah image baru ter-push, di server produksi cukup jalankan:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+## 10. Manual Build & Push (CLI)
+
+Jika kamu ingin melakukan build dan push secara manual (tanpa GitHub Actions/CI), ikuti langkah berikut:
+
+### 1. Login ke Docker Hub
+```bash
+docker login -u carlomuzaqi
+# Masukkan password/token saat diminta
+```
+
+### 2. Build Image
+
+**Backend** (Jalankan dari root folder `TA`):
+Penting: Jangan lupa tanda titik `.` di akhir perintah sebagai build context.
+```bash
+docker build -f "BE/final project/Dockerfile" -t carlomuzaqi/ta-backend:latest .
+docker build -t carlomuzaqi/ta-frontend:latest FE/finalProject
+```
+
+**Frontend**:
+```bash
+docker build -t carlomuzaqi/ta-frontend:latest FE/finalProject
+```
+
+### 3. Push Image
+```bash
+docker push carlomuzaqi/ta-backend:latest
+docker push carlomuzaqi/ta-frontend:latest
+```

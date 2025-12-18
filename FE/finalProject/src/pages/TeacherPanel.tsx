@@ -268,6 +268,10 @@ const TeacherPanel = () => {
   const isTeacher = !!profile?.user?.is_staff;
 
   // Ringkasan progres global untuk dashboard guru
+  // Hitung berdasarkan data yang difilter atau semua? 
+  // Biasanya ringkasan global tetap semua siswa, tapi tabelnya yang difilter.
+  // Kita biarkan ringkasan global tetap dari `students` (semua).
+
   const totalStudents = students.length;
   const totalXP = students.reduce((sum, s) => sum + (s.total_poin || 0), 0);
   const totalMissions = students.reduce(
@@ -282,13 +286,7 @@ const TeacherPanel = () => {
     totalStudents > 0 ? Math.round(totalXP / totalStudents) : 0;
 
   // Daftar kelas yang tersedia untuk filter
-  const availableClasses = Array.from(
-    new Set(
-      students
-        .map((s) => (s.kelas || '').trim())
-        .filter((k) => k && k.length > 0),
-    ),
-  ).sort();
+  const availableClasses = ['XA', 'XB', 'XC', 'XD', 'XE', 'XF', 'XG', 'XH', 'XI', 'XJ', 'XK'];
 
   const filteredStudents =
     selectedClassFilter === 'SEMUA'
@@ -643,6 +641,38 @@ const TeacherPanel = () => {
     }
   };
 
+  const handleCreateTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setCreatingTeacher(true);
+    try {
+      await authFetch('/api/teacher/teachers/create/', {
+        method: 'POST',
+        body: JSON.stringify(newTeacher),
+      });
+      alert('Guru baru berhasil ditambahkan.');
+      setNewTeacher({
+        username: '',
+        email: '',
+        password: '',
+        first_name: '',
+        last_name: '',
+      });
+
+      // Refresh teacher list
+      const teachersData = await authFetch<TeacherInfo[]>('/api/teacher/teachers/');
+      if (Array.isArray(teachersData)) {
+        setTeachers(teachersData);
+      }
+    } catch (e: any) {
+      console.error('Failed to create teacher', e);
+      const detail = e?.detail || e?.message || JSON.stringify(e);
+      setError(`Gagal menambahkan guru: ${detail}`);
+    } finally {
+      setCreatingTeacher(false);
+    }
+  };
+
   const handleQuestionTextChange = (index: number, value: string) => {
     setNewQuiz((prev) => {
       const questions = [...prev.questions];
@@ -875,6 +905,23 @@ const TeacherPanel = () => {
               Siswa & Progres
             </h2>
 
+            {/* Class Filter */}
+            <div className="mb-4 flex items-center space-x-2">
+              <label className="text-sm text-muted-foreground">Filter Kelas:</label>
+              <select
+                className="input-cosmic text-sm py-1 px-3 w-auto"
+                value={selectedClassFilter}
+                onChange={(e) => setSelectedClassFilter(e.target.value)}
+              >
+                <option value="SEMUA">Semua Kelas</option>
+                {availableClasses.map((cls) => (
+                  <option key={cls} value={cls}>
+                    {cls}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {loading ? (
               <p className="text-sm text-muted-foreground">Memuat data siswa...</p>
             ) : students.length === 0 ? (
@@ -900,7 +947,7 @@ const TeacherPanel = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {students.map((s) => (
+                    {filteredStudents.map((s) => (
                       <tr
                         key={s.id}
                         className="border-b border-border/40 hover:bg-surface/40 transition-colors"
@@ -1610,6 +1657,75 @@ const TeacherPanel = () => {
               </div>
             </div>
 
+
+
+            {/* Add Teacher Form */}
+            <div className="mission-card p-6">
+              <h3 className="text-lg font-bold text-foreground mb-4 flex items-center">
+                <Users className="w-5 h-5 text-neon-magenta mr-2" />
+                Tambah Guru Baru
+              </h3>
+              <form className="space-y-3" onSubmit={handleCreateTeacher}>
+                <input
+                  type="text"
+                  className="input-cosmic"
+                  placeholder="Username"
+                  value={newTeacher.username}
+                  onChange={(e) =>
+                    setNewTeacher((prev) => ({ ...prev, username: e.target.value }))
+                  }
+                  required
+                />
+                <input
+                  type="email"
+                  className="input-cosmic"
+                  placeholder="Email"
+                  value={newTeacher.email}
+                  onChange={(e) =>
+                    setNewTeacher((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                  required
+                />
+                <input
+                  type="text"
+                  className="input-cosmic"
+                  placeholder="Nama Depan"
+                  value={newTeacher.first_name}
+                  onChange={(e) =>
+                    setNewTeacher((prev) => ({ ...prev, first_name: e.target.value }))
+                  }
+                  required
+                />
+                <input
+                  type="text"
+                  className="input-cosmic"
+                  placeholder="Nama Belakang"
+                  value={newTeacher.last_name}
+                  onChange={(e) =>
+                    setNewTeacher((prev) => ({ ...prev, last_name: e.target.value }))
+                  }
+                />
+                <input
+                  type="password"
+                  className="input-cosmic"
+                  placeholder="Password"
+                  value={newTeacher.password}
+                  onChange={(e) =>
+                    setNewTeacher((prev) => ({ ...prev, password: e.target.value }))
+                  }
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={creatingTeacher}
+                  className="btn-neon w-full flex items-center justify-center space-x-2 py-2 disabled:opacity-50"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>{creatingTeacher ? 'Menambahkan...' : 'Tambah Guru'}</span>
+                </button>
+              </form>
+            </div>
+
             {/* Teachers list */}
             <div className="mission-card p-6">
               <h3 className="text-lg font-bold text-foreground mb-4 flex items-center">
@@ -1812,7 +1928,7 @@ const TeacherPanel = () => {
           </div>
         )}
       </div>
-    </div>
+    </div >
   );
 };
 

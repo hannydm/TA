@@ -1,20 +1,20 @@
 const computeDefaultBase = () => {
   if (typeof window === 'undefined') {
-    return 'http://127.0.0.1:8000';
+    return ''; // Return empty string for SSR to avoid localhost issues
   }
 
   const { protocol, hostname, port } = window.location;
 
-  // Untuk domain produksi, gunakan origin yang sama persis dengan halaman
-  // (tanpa mengganti ke IP), supaya IP publik tidak tampil di Network tab
-  // dan supaya tidak terkena masalah mixed-content atau sertifikat.
+  // Production domain: Nginx handles /api/ proxy, so use origin without port
   if (hostname === 'digiworld.biz.id') {
-    const effectivePort = port ? `:${port}` : '';
-    return `${protocol}//${hostname}${effectivePort}`;
+    console.log('[DEBUG] Detected production domain:', hostname);
+    return `${protocol}//${hostname}`;
   }
 
-  const defaultPort = '8000';
-  return `${protocol}//${hostname}:${defaultPort}`;
+  // Local development: backend runs on port 8000
+  const backendPort = port === '8080' ? '8000' : '8000';
+  console.log('[DEBUG] Detected local/dev environment:', hostname, backendPort);
+  return `${protocol}//${hostname}:${backendPort}`;
 };
 
 export const API_BASE_URL =
