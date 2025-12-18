@@ -20,3 +20,4 @@ Thumbs.db
 
 # Secret
 docker-compose.yml
+docker-publish.yml
