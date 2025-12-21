@@ -910,6 +910,7 @@ def teacher_create_teacher_view(request):
     - last_name (str)
   """
   from django.contrib.auth.models import User
+  from .models import ProfilSiswa
 
   username = (request.data.get('username') or '').strip()
   email = (request.data.get('email') or '').strip()
@@ -935,15 +936,18 @@ def teacher_create_teacher_view(request):
           status=status.HTTP_400_BAD_REQUEST,
       )
 
-  user = User(
+  # Buat user baru dengan is_staff=True
+  user = User.objects.create_user(
       username=username,
       email=email,
+      password=password,
       first_name=first_name,
       last_name=last_name,
-      is_staff=True,  # tandai sebagai guru
+      is_staff=True
   )
-  user.set_password(password)
-  user.save()
+  
+  # Pastikan ProfilSiswa dibuatkan
+  ProfilSiswa.objects.get_or_create(user=user)
 
   return Response(
       {

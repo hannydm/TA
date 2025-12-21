@@ -666,7 +666,12 @@ const TeacherPanel = () => {
       }
     } catch (e: any) {
       console.error('Failed to create teacher', e);
-      const detail = e?.detail || e?.message || JSON.stringify(e);
+      let detail = e?.detail || e?.message;
+      if (typeof e?.payload === 'object' && e?.payload !== null && 'error' in e.payload) {
+        detail = (e.payload as any).error;
+      } else if (!detail) {
+        detail = JSON.stringify(e);
+      }
       setError(`Gagal menambahkan guru: ${detail}`);
     } finally {
       setCreatingTeacher(false);
