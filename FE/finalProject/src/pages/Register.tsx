@@ -78,7 +78,7 @@ const Register = () => {
       {/* Animated background */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neon-cyan/10 via-background to-background"></div>
       <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-20"></div>
-      
+
       {/* Floating particles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {[...Array(20)].map((_, i) => (
@@ -185,17 +185,22 @@ const Register = () => {
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                <Input
+                <select
                   id="kelas"
-                  type="text"
-                  placeholder="Contoh: X IPA 1"
-                  className="pl-10 bg-background/50 border-border"
+                  className="pl-10 flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={formData.kelas}
                   onChange={(e) =>
                     setFormData({ ...formData, kelas: e.target.value })
                   }
                   disabled={isLoading}
-                />
+                >
+                  <option value="" disabled>Pilih Kelas</option>
+                  {['XA', 'XB', 'XC', 'XD', 'XE', 'XF', 'XG', 'XH', 'XI', 'XJ', 'XK'].map((cls) => (
+                    <option key={cls} value={cls}>
+                      {cls}
+                    </option>
+                  ))}
+                </select>
               </div>
               {errors.kelas && (
                 <p className="text-sm text-destructive">{errors.kelas}</p>

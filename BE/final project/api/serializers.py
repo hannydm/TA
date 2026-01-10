@@ -71,7 +71,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         # Tambahkan is_staff supaya frontend bisa tahu akun guru/admin
-        fields = ['username', 'email', 'first_name', 'last_name', 'is_staff']
+        fields = ['username', 'email', 'first_name', 'last_name', 'is_staff', 'is_superuser']
         read_only_fields = fields
 
 

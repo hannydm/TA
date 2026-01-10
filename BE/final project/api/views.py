@@ -906,11 +906,15 @@ def teacher_create_teacher_view(request):
     - password (str)
 
   Opsional:
-    - first_name (str)
-    - last_name (str)
   """
   from django.contrib.auth.models import User
   from .models import ProfilSiswa
+
+  if not request.user.is_superuser:
+      return Response(
+          {"error": "Hanya Super Admin yang dapat menambahkan guru baru."},
+          status=status.HTTP_403_FORBIDDEN,
+      )
 
   username = (request.data.get('username') or '').strip()
   email = (request.data.get('email') or '').strip()

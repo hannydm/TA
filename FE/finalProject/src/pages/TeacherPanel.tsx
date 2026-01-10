@@ -338,6 +338,22 @@ const TeacherPanel = () => {
     }
   };
 
+  const handleUpdateClass = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newClass = e.target.value;
+    try {
+      // Panggil endpoint update profil
+      await authFetch('/api/profil/update/', {
+        method: 'POST',
+        body: JSON.stringify({ kelas: newClass }),
+      });
+      // Refresh profile di context biar UI update
+      window.location.reload(); // Reload simple agar context fresh
+    } catch (err) {
+      console.error('Failed to update class', err);
+      alert('Gagal mengupdate kelas.');
+    }
+  };
+
   const handleCreateModule = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -895,6 +911,21 @@ const TeacherPanel = () => {
           </p>
         </div>
 
+        {/* Class Selection for Teacher */}
+        <div className="max-w-md mx-auto mission-card p-4 flex items-center justify-between">
+          <label className="text-sm font-semibold text-foreground mr-2">Kelas Mengajar:</label>
+          <select
+            className="input-cosmic py-1 px-3 w-auto text-sm"
+            value={profile?.kelas || ''}
+            onChange={handleUpdateClass}
+          >
+            <option value="">Pilih Kelas...</option>
+            {availableClasses.map((cls) => (
+              <option key={cls} value={cls}>{cls}</option>
+            ))}
+          </select>
+        </div>
+
         {error && (
           <div className="mission-card p-4 border border-destructive/50 bg-destructive/10 text-destructive text-sm">
             {error}
@@ -903,103 +934,38 @@ const TeacherPanel = () => {
 
         {/* Grid: Students overview + Content forms */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-          {/* Students table */}
-          <div className="xl:col-span-2 mission-card p-6 overflow-x-auto">
+          {/* Teachers list (Moved from bottom) */}
+          <div className="xl:col-span-2 mission-card p-6">
             <h2 className="text-xl font-bold text-foreground mb-4 flex items-center">
               <Users className="w-5 h-5 text-neon-cyan mr-2" />
-              Siswa & Progres
+              Data Guru
             </h2>
-
-            {/* Class Filter */}
-            <div className="mb-4 flex items-center space-x-2">
-              <label className="text-sm text-muted-foreground">Filter Kelas:</label>
-              <select
-                className="input-cosmic text-sm py-1 px-3 w-auto"
-                value={selectedClassFilter}
-                onChange={(e) => setSelectedClassFilter(e.target.value)}
-              >
-                <option value="SEMUA">Semua Kelas</option>
-                {availableClasses.map((cls) => (
-                  <option key={cls} value={cls}>
-                    {cls}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {loading ? (
-              <p className="text-sm text-muted-foreground">Memuat data siswa...</p>
-            ) : students.length === 0 ? (
+            {teachers.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Belum ada siswa yang terdaftar.
+                Belum ada guru yang terdaftar (is_staff).
               </p>
             ) : (
-              <div className="border border-border/60 rounded-xl overflow-hidden">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-surface/60 border-b border-border/60">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Nama</th>
-                      <th className="px-3 py-2 text-left hidden md:table-cell">Username</th>
-                      <th className="px-3 py-2 text-left hidden lg:table-cell">Kelas</th>
-                      <th className="px-3 py-2 text-right">Level</th>
-                      <th className="px-3 py-2 text-right">XP</th>
-                      <th className="px-3 py-2 text-right hidden sm:table-cell">
-                        Misi
-                      </th>
-                      <th className="px-3 py-2 text-right hidden sm:table-cell">
-                        Quiz
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredStudents.map((s) => (
-                      <tr
-                        key={s.id}
-                        className="border-b border-border/40 hover:bg-surface/40 transition-colors"
-                      >
-                        <td className="px-3 py-2">
-                          <button
-                            type="button"
-                            onClick={() => loadStudentDetail(s)}
-                            className="flex items-center space-x-2 text-left w-full hover:text-neon-cyan transition-colors"
-                          >
-                            {(() => {
-                              const url = resolveAvatarUrl(s.avatar);
-                              return url ? (
-                                <img
-                                  src={url}
-                                  alt={s.full_name}
-                                  className="w-7 h-7 rounded-full object-cover border border-border/60"
-                                />
-                              ) : (
-                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-neon-cyan/20 to-neon-magenta/20 flex items-center justify-center text-xs font-bold">
-                                  {s.full_name.charAt(0).toUpperCase()}
-                                </div>
-                              );
-                            })()}
-                            <span className="font-medium text-foreground truncate">
-                              {s.full_name}
-                            </span>
-                          </button>
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground hidden md:table-cell">
-                          {s.username}
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground hidden lg:table-cell">
-                          {s.kelas || '-'}
-                        </td>
-                        <td className="px-3 py-2 text-right">{s.level}</td>
-                        <td className="px-3 py-2 text-right">{s.total_poin}</td>
-                        <td className="px-3 py-2 text-right hidden sm:table-cell">
-                          {s.missions_completed}
-                        </td>
-                        <td className="px-3 py-2 text-right hidden sm:table-cell">
-                          {s.quizzes_completed}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-2 max-h-[500px] overflow-auto pr-2">
+                {teachers.map((t) => (
+                  <div
+                    key={t.username}
+                    className="flex items-center justify-between p-3 rounded-lg bg-surface/40 border border-border/40"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-neon-cyan/20 to-neon-magenta/20 flex items-center justify-center text-sm font-bold">
+                        {t.full_name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-foreground">
+                          {t.full_name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {t.email || t.username}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1665,273 +1631,81 @@ const TeacherPanel = () => {
 
 
             {/* Add Teacher Form */}
-            <div className="mission-card p-6">
-              <h3 className="text-lg font-bold text-foreground mb-4 flex items-center">
-                <Users className="w-5 h-5 text-neon-magenta mr-2" />
-                Tambah Guru Baru
-              </h3>
-              <form className="space-y-3" onSubmit={handleCreateTeacher}>
-                <input
-                  type="text"
-                  className="input-cosmic"
-                  placeholder="Username"
-                  value={newTeacher.username}
-                  onChange={(e) =>
-                    setNewTeacher((prev) => ({ ...prev, username: e.target.value }))
-                  }
-                  required
-                />
-                <input
-                  type="email"
-                  className="input-cosmic"
-                  placeholder="Email"
-                  value={newTeacher.email}
-                  onChange={(e) =>
-                    setNewTeacher((prev) => ({ ...prev, email: e.target.value }))
-                  }
-                  required
-                />
-                <input
-                  type="text"
-                  className="input-cosmic"
-                  placeholder="Nama Depan"
-                  value={newTeacher.first_name}
-                  onChange={(e) =>
-                    setNewTeacher((prev) => ({ ...prev, first_name: e.target.value }))
-                  }
-                  required
-                />
-                <input
-                  type="text"
-                  className="input-cosmic"
-                  placeholder="Nama Belakang"
-                  value={newTeacher.last_name}
-                  onChange={(e) =>
-                    setNewTeacher((prev) => ({ ...prev, last_name: e.target.value }))
-                  }
-                />
-                <input
-                  type="password"
-                  className="input-cosmic"
-                  placeholder="Password"
-                  value={newTeacher.password}
-                  onChange={(e) =>
-                    setNewTeacher((prev) => ({ ...prev, password: e.target.value }))
-                  }
-                  required
-                />
-                <button
-                  type="submit"
-                  disabled={creatingTeacher}
-                  className="btn-neon w-full flex items-center justify-center space-x-2 py-2 disabled:opacity-50"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span>{creatingTeacher ? 'Menambahkan...' : 'Tambah Guru'}</span>
-                </button>
-              </form>
-            </div>
+            {/* Add Teacher Form - ONLY FOR SUPERUSERS */}
+            {profile?.user?.is_superuser && (
+              <div className="mission-card p-6">
+                <h3 className="text-lg font-bold text-foreground mb-4 flex items-center">
+                  <Users className="w-5 h-5 text-neon-magenta mr-2" />
+                  Tambah Guru Baru
+                </h3>
+                <form className="space-y-3" onSubmit={handleCreateTeacher}>
+                  <input
+                    type="text"
+                    className="input-cosmic"
+                    placeholder="Username"
+                    value={newTeacher.username}
+                    onChange={(e) =>
+                      setNewTeacher((prev) => ({ ...prev, username: e.target.value }))
+                    }
+                    required
+                  />
+                  <input
+                    type="email"
+                    className="input-cosmic"
+                    placeholder="Email"
+                    value={newTeacher.email}
+                    onChange={(e) =>
+                      setNewTeacher((prev) => ({ ...prev, email: e.target.value }))
+                    }
+                    required
+                  />
+                  <input
+                    type="text"
+                    className="input-cosmic"
+                    placeholder="Nama Depan"
+                    value={newTeacher.first_name}
+                    onChange={(e) =>
+                      setNewTeacher((prev) => ({ ...prev, first_name: e.target.value }))
+                    }
+                    required
+                  />
+                  <input
+                    type="text"
+                    className="input-cosmic"
+                    placeholder="Nama Belakang"
+                    value={newTeacher.last_name}
+                    onChange={(e) =>
+                      setNewTeacher((prev) => ({ ...prev, last_name: e.target.value }))
+                    }
+                  />
+                  <input
+                    type="password"
+                    className="input-cosmic"
+                    placeholder="Password"
+                    value={newTeacher.password}
+                    onChange={(e) =>
+                      setNewTeacher((prev) => ({ ...prev, password: e.target.value }))
+                    }
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={creatingTeacher}
+                    className="btn-neon w-full flex items-center justify-center space-x-2 py-2 disabled:opacity-50"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>{creatingTeacher ? 'Menambahkan...' : 'Tambah Guru'}</span>
+                  </button>
+                </form>
+              </div>
+            )}
 
-            {/* Teachers list */}
-            <div className="mission-card p-6">
-              <h3 className="text-lg font-bold text-foreground mb-4 flex items-center">
-                <Users className="w-5 h-5 text-neon-cyan mr-2" />
-                Daftar Guru
-              </h3>
-              {teachers.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Belum ada guru yang terdaftar (is_staff).
-                </p>
-              ) : (
-                <div className="space-y-2 max-h-56 overflow-auto pr-2">
-                  {teachers.map((t) => (
-                    <div
-                      key={t.username}
-                      className="flex items-center justify-between p-2 rounded-lg bg-surface/40 border border-border/40"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-neon-cyan/20 to-neon-magenta/20 flex items-center justify-center text-xs font-bold">
-                          {t.full_name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium text-foreground">
-                            {t.full_name}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {t.email || t.username}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Teachers list moved to main area */}
           </div>
         </div>
 
         {/* Detail siswa terpilih */}
-        {selectedStudent && (
-          <div className="mission-card p-6" ref={detailRef}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-xl font-bold text-foreground">
-                  Detail Siswa: {selectedStudent.full_name}
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Lihat ringkasan progres modul dan nilai quiz yang sudah dikerjakan.
-                </p>
-              </div>
-            </div>
 
-            {loadingDetail ? (
-              <p className="text-sm text-muted-foreground">Memuat detail siswa...</p>
-            ) : studentDetail ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Ringkasan profil & statistik */}
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-3 p-3 rounded-lg bg-surface/40 border border-border/60">
-                    {(() => {
-                      const url = resolveAvatarUrl(studentDetail.avatar);
-                      return url ? (
-                        <img
-                          src={url}
-                          alt={studentDetail.full_name}
-                          className="w-10 h-10 rounded-full object-cover border border-border/60"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neon-cyan/20 to-neon-magenta/20 flex items-center justify-center text-sm font-bold">
-                          {studentDetail.full_name.charAt(0).toUpperCase()}
-                        </div>
-                      );
-                    })()}
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">
-                        {studentDetail.full_name}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        @{studentDetail.username}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        Kelas: {studentDetail.kelas || '-'}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        NISN: {studentDetail.nisn || '-'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-lg bg-surface/40 border border-border/60">
-                    <p className="text-xs text-muted-foreground">Level</p>
-                    <p className="text-lg font-bold text-neon-cyan">
-                      {studentDetail.level}
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-surface/40 border border-border/60">
-                    <p className="text-xs text-muted-foreground">Total XP</p>
-                    <p className="text-lg font-bold text-neon-magenta">
-                      {studentDetail.total_poin}
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-surface/40 border border-border/60">
-                    <p className="text-xs text-muted-foreground">Total Quiz</p>
-                    <p className="text-lg font-bold text-success">
-                      {studentDetail.quizzes_total}
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-surface/40 border border-border/60">
-                    <p className="text-xs text-muted-foreground">Rata-rata Skor Quiz</p>
-                    <p className="text-lg font-bold text-foreground">
-                      {studentDetail.quizzes_avg_score.toFixed(1)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Progres modul & daftar nilai quiz */}
-                <div className="md:col-span-2 space-y-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-2">
-                      Progres per Modul
-                    </h3>
-                    <div className="space-y-2 max-h-40 overflow-auto pr-1">
-                      {studentDetail.modules.map((m) => (
-                        <div
-                          key={m.id}
-                          className="flex items-center justify-between p-2 rounded-lg bg-surface/40 border border-border/50"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-foreground">{m.judul}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {m.materi_selesai}/{m.total_materi} materi selesai
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-2">
-                      Nilai Quiz yang Sudah Dikerjakan
-                    </h3>
-                    {studentDetail.recent_quizzes.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        Belum ada quiz yang dikerjakan siswa ini.
-                      </p>
-                    ) : (
-                      <div className="space-y-2 max-h-52 overflow-auto pr-1">
-                        {studentDetail.recent_quizzes.map((q) => (
-                          <div
-                            key={q.id}
-                            className="flex items-center justify-between p-2 rounded-lg bg-surface/40 border border-border/50"
-                          >
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-foreground truncate">
-                                {q.materi_judul}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {new Date(q.tanggal).toLocaleString()}
-                              </p>
-                            </div>
-                            <div className="text-right ml-3">
-                              <p className="text-sm font-bold text-neon-cyan">
-                                {q.skor} XP
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-2">
-                      Lencana yang Dimiliki
-                    </h3>
-                    {!studentDetail.badges || studentDetail.badges.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        Belum ada lencana yang diperoleh.
-                      </p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {studentDetail.badges.map((b) => (
-                          <div
-                            key={b.id}
-                            className="px-3 py-1 rounded-full bg-gradient-to-r from-neon-cyan/20 to-neon-magenta/20 border border-border/60 text-[11px]"
-                          >
-                            <span className="font-semibold text-foreground">{b.nama}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Pilih siswa di tabel untuk melihat detail progres dan nilai quiznya.
-              </p>
-            )}
-          </div>
-        )}
       </div>
     </div >
   );
