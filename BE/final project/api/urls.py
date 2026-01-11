@@ -67,6 +67,7 @@ urlpatterns = [
     path('teacher/livecode/create/', views.teacher_create_livecode_view, name='teacher-create-livecode'),
     path('teacher/teachers/', views.teacher_list_view, name='teacher-list'),
     path('teacher/teachers/create/', views.teacher_create_teacher_view, name='teacher-create-teacher'),
+    path('teacher/update-class/<int:user_id>/', views.teacher_update_class_assignment_view, name='teacher-update-class'), # [NEW]
     path('teacher/badges/', views.teacher_badges_view, name='teacher-badges'),
     path(
         'teacher/badges/<int:badge_id>/',

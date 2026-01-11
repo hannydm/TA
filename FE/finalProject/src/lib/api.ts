@@ -18,8 +18,10 @@ const computeDefaultBase = () => {
 };
 
 export const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
-  computeDefaultBase();
+  (typeof window !== 'undefined' && window.location.hostname === 'digiworld.biz.id')
+    ? `${window.location.protocol}//${window.location.hostname}`
+    : (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
+    computeDefaultBase();
 
 export const buildApiUrl = (path: string) => {
   if (!path) {

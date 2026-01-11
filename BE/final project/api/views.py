@@ -101,9 +101,18 @@ def profil_update_view(request):
         profil.nisn = (str(nisn).strip() or None)
         changed = True
 
+    # Hanya Superuser yang boleh mengubah kelas lewat endpoint ini?
+    # Rencana awal: Guru tidak boleh ubah sendiri. Jadi kita cek di sini.
+    # Namun `profil_update_view` ini dipakai siswa juga?
+    # Siswa boleh ubah kelas sendiri saat registrasi/profil?
+    # Revisi: Jika user adalah STAFF (Guru) dan BUKAN Superuser, blok update kelas.
     if kelas is not None:
-        profil.kelas = (str(kelas).strip() or None)
-        changed = True
+        if request.user.is_staff and not request.user.is_superuser:
+            # Abaikan perubahan kelas untuk guru biasa
+            pass 
+        else:
+            profil.kelas = (str(kelas).strip() or None)
+            changed = True
 
     if changed:
         profil.save()
@@ -729,6 +738,21 @@ def teacher_students_overview_view(request):
       .order_by('-total_poin')
   )
 
+  # [NEW] Filter based on Teacher's Class
+  if not request.user.is_superuser:
+      # If not superuser, restricting to own class
+      # Ensure the teacher has a profile assignment
+      try:
+          teacher_profile = request.user.profilsiswa
+          teacher_class = teacher_profile.kelas
+          if teacher_class:
+              profils = profils.filter(kelas=teacher_class)
+          else:
+              # If teacher has no class assigned, they see NO students
+              profils = profils.none()
+      except ProfilSiswa.DoesNotExist:
+           profils = profils.none()
+
   data = []
   for profil in profils:
       missions_completed = MateriSelesai.objects.filter(profil_siswa=profil).count()
@@ -780,6 +804,26 @@ def teacher_student_detail_view(request, profil_id: int):
   - ringkasan quiz (total, rata-rata skor, riwayat terakhir)
   """
   profil = get_object_or_404(ProfilSiswa, id=profil_id)
+
+  # [SECURE] Restrict access: Teachers can only view students in their assigned class
+  if not request.user.is_superuser:
+      try:
+          teacher_profile = request.user.profilsiswa
+          if not teacher_profile.kelas:
+               return Response(
+                   {"error": "Anda belum ditugaskan ke kelas manapun."},
+                   status=status.HTTP_403_FORBIDDEN
+               )
+          if profil.kelas != teacher_profile.kelas:
+              return Response(
+                  {"error": "Anda tidak memiliki akses untuk melihat detail siswa ini."},
+                  status=status.HTTP_403_FORBIDDEN
+              )
+      except ProfilSiswa.DoesNotExist:
+          return Response(
+              {"error": "Profil guru tidak ditemukan."},
+              status=status.HTTP_403_FORBIDDEN
+          )
 
   # Modul progress
   modules_data = []
@@ -888,7 +932,10 @@ def teacher_list_view(request):
           {
               "username": u.username,
               "full_name": full_name,
+              "full_name": full_name,
               "email": u.email,
+              "kelas": u.profilsiswa.kelas if hasattr(u, 'profilsiswa') else None,
+              "id": u.id,  # [NEW] Needed for ID-based updates
           }
       )
   return Response(data, status=status.HTTP_200_OK)
@@ -1489,3 +1536,43 @@ def teacher_create_livecode_view(request):
       return Response(serializer.data, status=status.HTTP_201_CREATED)
   except Exception as e:
       return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+      return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def teacher_update_class_assignment_view(request, user_id):
+    """
+    Super Admin menugaskan kelas ke Guru.
+    URL: /api/teacher/update-class/<int:user_id>/
+    Body: { "kelas": "XA" }
+    """
+    if not request.user.is_superuser:
+        return Response(
+            {"error": "Hanya Super Admin yang dapat mengubah penugasan kelas guru."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    
+    from django.contrib.auth.models import User
+    target_user = get_object_or_404(User, id=user_id)
+    
+    # Pastikan target adalah staff (guru)
+    if not target_user.is_staff:
+         return Response(
+            {"error": "User target bukan guru/staff."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    kelas = request.data.get('kelas')
+    
+    # Update profil
+    profil, _ = ProfilSiswa.objects.get_or_create(user=target_user)
+    profil.kelas = kelas if kelas else None
+    profil.save()
+
+    return Response(
+        {
+            "username": target_user.username,
+            "kelas_assigned": profil.kelas
+        },
+        status=status.HTTP_200_OK
+    )

@@ -301,11 +301,15 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Basic student data (NISN & kelas) */}
+        {/* Basic student/teacher data (NISN & kelas) */}
         <div className="mission-card p-6">
-          <h2 className="text-xl font-bold text-foreground mb-4">Data Siswa</h2>
+          <h2 className="text-xl font-bold text-foreground mb-4">
+            {profile?.user?.is_staff ? 'Data Guru' : 'Data Siswa'}
+          </h2>
           <p className="text-xs text-muted-foreground mb-4">
-            Lengkapi informasi NISN dan kelas agar guru dapat memantau progres belajarmu dengan tepat.
+            {profile?.user?.is_staff
+              ? 'Lengkapi atau perbarui informasi kelas yang Anda ampu.'
+              : 'Lengkapi informasi NISN dan kelas agar guru dapat memantau progres belajarmu dengan tepat.'}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>

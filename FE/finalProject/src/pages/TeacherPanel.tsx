@@ -92,9 +92,11 @@ interface MateriDetailForTeacher {
 }
 
 interface TeacherInfo {
+  id: number; // [NEW]
   username: string;
   full_name: string;
   email: string;
+  kelas?: string | null;
 }
 
 interface StudentModuleProgress {
@@ -338,21 +340,28 @@ const TeacherPanel = () => {
     }
   };
 
-  const handleUpdateClass = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newClass = e.target.value;
+
+  // [NEW] Super Admin assigns class to a teacher
+  const handleAssignClass = async (targetUserId: number, newClass: string) => {
     try {
-      // Panggil endpoint update profil
-      await authFetch('/api/profil/update/', {
+      await authFetch(`/api/teacher/update-class/${targetUserId}/`, {
         method: 'POST',
         body: JSON.stringify({ kelas: newClass }),
       });
-      // Refresh profile di context biar UI update
-      window.location.reload(); // Reload simple agar context fresh
-    } catch (err) {
-      console.error('Failed to update class', err);
-      alert('Gagal mengupdate kelas.');
+      alert(`Berhasil mengubah kelas guru.`);
+
+      // Refresh teacher list
+      const teachersData = await authFetch<TeacherInfo[]>('/api/teacher/teachers/');
+      if (Array.isArray(teachersData)) {
+        setTeachers(teachersData);
+      }
+    } catch (err: any) {
+      console.error('Failed to assign class', err);
+      alert('Gagal mengubah kelas guru: ' + (err?.payload?.error || err.message));
     }
   };
+
+  // [REMOVED] handleUpdateClass for self (teachers cannot update their own class anymore)
 
   const handleCreateModule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -912,19 +921,15 @@ const TeacherPanel = () => {
         </div>
 
         {/* Class Selection for Teacher */}
-        <div className="max-w-md mx-auto mission-card p-4 flex items-center justify-between">
-          <label className="text-sm font-semibold text-foreground mr-2">Kelas Mengajar:</label>
-          <select
-            className="input-cosmic py-1 px-3 w-auto text-sm"
-            value={profile?.kelas || ''}
-            onChange={handleUpdateClass}
-          >
-            <option value="">Pilih Kelas...</option>
-            {availableClasses.map((cls) => (
-              <option key={cls} value={cls}>{cls}</option>
-            ))}
-          </select>
-        </div>
+        {/* Class Info for Teacher (Read Only) */}
+        {!profile?.user?.is_superuser && (
+          <div className="max-w-md mx-auto mission-card p-4 flex items-center justify-center space-x-2">
+            <span className="text-sm font-semibold text-muted-foreground">Kelas Mengajar Anda:</span>
+            <span className="text-lg font-bold text-neon-cyan">
+              {profile?.kelas || 'Belum Ditentukan'}
+            </span>
+          </div>
+        )}
 
         {error && (
           <div className="mission-card p-4 border border-destructive/50 bg-destructive/10 text-destructive text-sm">
@@ -934,40 +939,274 @@ const TeacherPanel = () => {
 
         {/* Grid: Students overview + Content forms */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-          {/* Teachers list (Moved from bottom) */}
-          <div className="xl:col-span-2 mission-card p-6">
-            <h2 className="text-xl font-bold text-foreground mb-4 flex items-center">
-              <Users className="w-5 h-5 text-neon-cyan mr-2" />
-              Data Guru
-            </h2>
-            {teachers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Belum ada guru yang terdaftar (is_staff).
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-[500px] overflow-auto pr-2">
-                {teachers.map((t) => (
-                  <div
-                    key={t.username}
-                    className="flex items-center justify-between p-3 rounded-lg bg-surface/40 border border-border/40"
+          {/* Students Overview & Detail */}
+          <div className="xl:col-span-2 space-y-6">
+
+            {/* Class Filter (Super Admin Only) */}
+            {profile?.user?.is_superuser && (
+              <div className="mission-card p-4 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-semibold text-muted-foreground">Filter Kelas:</span>
+                  <select
+                    className="input-cosmic py-1 px-3 w-32 h-9"
+                    value={selectedClassFilter}
+                    onChange={(e) => setSelectedClassFilter(e.target.value)}
                   >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-neon-cyan/20 to-neon-magenta/20 flex items-center justify-center text-sm font-bold">
-                        {t.full_name.charAt(0).toUpperCase()}
+                    <option value="SEMUA">Semua</option>
+                    {availableClasses.map((cls) => (
+                      <option key={cls} value={cls}>
+                        {cls}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Menampilkan {filteredStudents.length} siswa
+                </div>
+              </div>
+            )}
+
+            {/* Student List */}
+            {!selectedStudent ? (
+              <div className="mission-card p-6">
+                <h2 className="text-xl font-bold text-foreground mb-4 flex items-center">
+                  <Users className="w-5 h-5 text-neon-magenta mr-2" />
+                  Data Siswa & Progres
+                </h2>
+
+                {filteredStudents.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>Tidak ada siswa ditemukan.</p>
+                    {!profile?.user?.is_superuser && !profile?.kelas && (
+                      <p className="text-xs mt-2 text-yellow-500">Anda belum memiliki kelas assigned.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-border/50 text-xs text-muted-foreground uppercase tracking-wider">
+                          <th className="p-3">Siswa</th>
+                          <th className="p-3">Kelas</th>
+                          <th className="p-3 text-center">Level / XP</th>
+                          <th className="p-3 text-center">Misi</th>
+                          <th className="p-3 text-center">Quiz</th>
+                          <th className="p-3 text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-sm text-foreground space-y-2">
+                        {filteredStudents.map((s) => (
+                          <tr
+                            key={s.id}
+                            className="group hover:bg-surface/40 transition-colors border-b border-border/20 last:border-0"
+                          >
+                            <td className="p-3">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-neon-cyan/20 to-neon-magenta/20 flex items-center justify-center overflow-hidden border border-neon-cyan/30">
+                                  {s.avatar ? (
+                                    <img
+                                      src={resolveAvatarUrl(s.avatar)}
+                                      alt="avatar"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <span className="text-xs font-bold text-neon-cyan">
+                                      {s.full_name.charAt(0).toUpperCase()}
+                                    </span>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="font-semibold">{s.full_name}</div>
+                                  <div className="text-[10px] text-muted-foreground">
+                                    {s.username}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <span className="px-2 py-0.5 rounded-full bg-surface border border-border text-[10px]">
+                                {s.kelas || '-'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <div className="flex flex-col items-center">
+                                <span className="font-bold text-neon-cyan">Lvl {s.level}</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {s.total_poin} XP
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className="text-xs">{s.missions_completed} Selesai</span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className="text-xs">{s.quizzes_completed} Selesai</span>
+                            </td>
+                            <td className="p-3 text-right">
+                              <button
+                                onClick={() => loadStudentDetail(s)}
+                                className="btn-ghost text-xs py-1 px-3"
+                              >
+                                Detail
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Detail View */
+              <div className="mission-card p-6" ref={detailRef}>
+                <button
+                  onClick={() => setSelectedStudent(null)}
+                  className="mb-4 text-xs hover:underline text-muted-foreground flex items-center"
+                >
+                  &larr; Kembali ke daftar siswa
+                </button>
+
+                {loadingDetail ? (
+                  <div className="text-center py-8">Loading detail...</div>
+                ) : studentDetail ? (
+                  <div className="space-y-6">
+                    {/* Header Detail */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-16 h-16 rounded-full bg-surface border-2 border-neon-cyan overflow-hidden">
+                          {studentDetail.avatar ? (
+                            <img
+                              src={resolveAvatarUrl(studentDetail.avatar)}
+                              alt="avatar"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-xl font-bold text-neon-cyan">
+                              {studentDetail.full_name.charAt(0)}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <h2 className="text-2xl font-bold bg-gradient-to-r from-neon-cyan to-neon-magenta bg-clip-text text-transparent">
+                            {studentDetail.full_name}
+                          </h2>
+                          <div className="flex items-center space-x-3 text-sm text-muted-foreground mt-1">
+                            <span>{studentDetail.kelas || 'Tanpa Kelas'}</span>
+                            <span>•</span>
+                            <span>Lvl {studentDetail.level}</span>
+                            <span>•</span>
+                            <span className="text-neon-cyan font-bold">
+                              {studentDetail.total_poin} XP
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-foreground">
-                          {t.full_name}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {t.email || t.username}
-                        </span>
+                    </div>
+
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-3 rounded-lg bg-surface/40 border border-border/40 text-center">
+                        <div className="text-xs text-muted-foreground">Total Quiz</div>
+                        <div className="text-xl font-bold text-foreground">
+                          {studentDetail.quizzes_total}
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-surface/40 border border-border/40 text-center">
+                        <div className="text-xs text-muted-foreground">Rata-rata Skor</div>
+                        <div className="text-xl font-bold text-neon-magenta">
+                          {Math.round(studentDetail.quizzes_avg_score)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Modules Progress */}
+                    <div>
+                      <h3 className="text-md font-bold mb-3 flex items-center">
+                        <BookOpen className="w-4 h-4 mr-2 text-neon-cyan" />
+                        Progres Modul
+                      </h3>
+                      <div className="space-y-3">
+                        {studentDetail.modules.map((m) => (
+                          <div
+                            key={m.id}
+                            className="p-3 rounded-lg bg-surface/30 border border-border/30 flex items-center justify-between"
+                          >
+                            <span className="text-sm font-medium">{m.judul}</span>
+                            <div className="flex items-center space-x-3">
+                              <span className="text-xs text-muted-foreground">
+                                {m.materi_selesai} / {m.total_materi} materi
+                              </span>
+                              {m.materi_selesai >= m.total_materi && m.total_materi > 0 && (
+                                <CheckCircle className="w-4 h-4 text-neon-cyan" />
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
-                ))}
+                ) : (
+                  <div>Data tidak ditemukan.</div>
+                )}
               </div>
             )}
+
+            {/* Teachers list (Moved from bottom) */}
+            <div className="mission-card p-6">
+              <h2 className="text-xl font-bold text-foreground mb-4 flex items-center">
+                <Users className="w-5 h-5 text-neon-cyan mr-2" />
+                Data Guru
+              </h2>
+              {teachers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Belum ada guru yang terdaftar (is_staff).
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-[500px] overflow-auto pr-2">
+                  {teachers.map((t) => (
+                    <div
+                      key={t.username}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-surface/40 border border-border/40 gap-3"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-neon-cyan/20 to-neon-magenta/20 flex items-center justify-center text-sm font-bold">
+                          {t.full_name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-foreground">
+                            {t.full_name}
+                          </span>
+                          <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+                            <span>{t.email || t.username}</span>
+                            <span>•</span>
+                            <span className={t.kelas ? "text-neon-cyan" : "text-yellow-500"}>
+                              {t.kelas ? `Kelas ${t.kelas}` : 'Tanpa Kelas'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Super Admin Control: Assign Class */}
+                      {profile?.user?.is_superuser && (
+                        <div className="flex items-center space-x-2">
+                          <select
+                            className="input-cosmic text-xs py-1 px-2 w-auto h-8"
+                            value={t.kelas || ''}
+                            onChange={(e) => handleAssignClass(t.id, e.target.value)}
+                          >
+                            <option value="">- Kelas -</option>
+                            {availableClasses.map((cls) => (
+                              <option key={cls} value={cls}>{cls}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right column: content forms + teacher list */}
